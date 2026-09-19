@@ -1,0 +1,146 @@
+# HS2 捏人系统（从 myHs2 迁移到 Godot）
+
+把 `/Users/xiaofeng.zhao/myHs2` 的 HS2 捏人功能与模型迁移进 Godot 的成果。
+
+## 目录
+
+| 文件 | 作用 |
+| --- | --- |
+| `hs2/data/` | HoneySelect 原版捏人数据表（cf_customhead/body、cf_anmShapeHead/Body、bone_mappings.csv、face_bone_mappings.csv） |
+| `hs2/model/` | 角色七部件（body/top/bot/shoe/head/hair_f/hair_b）+ Textures |
+| `hs2/hs2_shape.gd` | 数据层：`shape.js` / `shape_data.py` 的 GDScript 1:1 移植（滑杆 0..1 → 骨骼增量） |
+| `hs2/hs2_rig_merge.gd` | 骨架合并器：`rig_merge.js` 思路的 Godot 实现（单一骨架 + 统一蒙皮 + 接缝对齐） |
+| `hs2/hs2_character.gd` | 装配层：加载七部件、合并骨架、应用捏人增量、滑杆 UI（脸部 66 项 / 身体 33 项） |
+| `character_creator.tscn` | 捏人场景（F6 直接运行） |
+| `tools/fbx2glb.py` | Blender 批处理：把 HS2 的 FBX 转成 glb（Godot 的 ufbx 导入这些 FBX 会破坏 bind，必须走这条转换） |
+
+## 关键实现要点（踩坑记录）
+
+1. **FBX → glb**：直接用 Godot 导入 HS2 的 FBX 时，头模 bind 会错乱（网格被拉伸）。改用 Blender headless 转换 glb 后正常。
+2. **网格朝向**：原始 glb 需在模型根节点加 `rotation_degrees = (180,0,0)` 才站立。
+3. **Godot 蒙皮公式**（用 4 组候选公式实测判别）：`v_render = S · Pose(b) · bind(b) · v_mesh`，且实测 `bind(b) = rest(b)⁻¹`（静止时等于原网格）。
+4. **合并骨架**：把 head/hair 的骨骼并入 body 骨架（184 → 289 骨），
+   `rest_new(b) = A · rest_old(b)`，`bind_new(b) = bind_old(b)`（保持不变）。
+5. **必须重映射顶点骨骼索引**（对应 JS 的 `remapSkinIndex`）：否则头/发顶点仍指向身体骨，表现为“头跑到脚底下”。
+6. **头身接缝对齐**：A 由数据驱动求出——在蒙皮输出空间测量「身体脖颈顶端」与「头模底沿」，
+   把头模底沿放到脖颈顶端下方 `NECK_OVERLAP = 0.05` 处，保证接缝吻合。
+7. **头发朝向**：hair_f/hair_b 资产相对头部转了 180°（否则发髻盖脸），需额外绕竖直轴翻正。
+8. **镜像骨骼**：HS2 骨骼含负缩放，重建 pose 时要用 `basis.determinant() < 0` 补回符号，
+   无增量的骨骼直接用 `reset_bone_pose()` 回到 rest，避免整条链被转倒。
+
+## 用法
+
+1. 编辑器打开 `character_creator.tscn` 按 F6。
+2. 左侧滑杆：`face 0..N`（66 分类）、`body 0..N`（33 分类），0.5 为中性。
+3. 代码接口：`set_slider("face", 分类ID, 0..1)` / `apply_shape()`。
+## 头发专项分析（第二轮修复）
+
+第二轮把头发彻底对齐，结论如下（全部有实测数据支撑）：
+
+1. **发色贴图是灰度图**（实测均值 RGB≈0.65，alpha≈0.8），发色完全由材质 `albedo_color` 决定 → 脚本里用 `HAIR_TINT` 染色，`alpha_scissor=0.35` 裁剪发丝。
+2. **hair 的 bind 与 rest 不互逆**：身体满足 `bind = rest⁻¹`（静止渲染=原始网格），
+   但 head/hair 不满足——实测毛发渲染结果相对原始网格被整体转了 90°（后发从「竖直 0.57 长」变成「朝后横躺 0.57」）。
+   → 对头发改用 `rest = bind⁻¹`，使静止渲染回到原始网格方向（长发自然垂下）。
+3. **原始网格帧与世界帧差一次 180°X**：改用 `bind⁻¹` 后头发虽然竖起来了，
+   却是「朝上长」（世界 y 到 2.06，超过头顶），因为原始网格帧的上下与世界相反。
+   → 在装配增量 A 里补 `Rx(180)`。
+4. **发顶对齐**：旋转后按「发顶 = 头顶 + 0.01、x/z 取头部中心」平移，
+   最终后发世界包围盒 y∈[1.25, 1.82]（从头顶垂到背部中段）、z∈[-0.31,-0.02]（在头后方），
+   前发 z∈[0.02,0.11]（在脸前方）——与参考渲染一致。
+
+> 参考基准：`myHs2/myhs2/web/renderer_screenshot.png`（three.js 版渲染结果）。
+
+## 接缝专项复检（第三轮：隐藏头发看侧视）
+
+用顶点云统计代替包围盒近似，修正了头部前后偏移：
+
+| 测量项 | 修复前 | 修复后 |
+| --- | --- | --- |
+| 身体脖颈柱中心 z（y 1.54~1.62） | -0.034 ~ -0.049 | 同左 |
+| 头模底沿中心 z（y 1.56~1.64） | **+0.030**（头前移 7.4cm） | **-0.037**（误差 0.3cm） |
+
+做法（`_compute_attach_delta`）：
+1. 身体点云取「脖颈顶端下 2~10cm」这一段（纯脖子，不含肩膀），求其 x/z 中心；
+2. 头模点云取「最底部 6cm」（下颌/颈切口），求其 x/z 中心；
+3. 令两者重合、且头底沿位于脖颈顶端下方 `NECK_OVERLAP = 0.05`。
+
+验证方式：把 `hair_f`/`hair_b` 隐藏后分别看正视图与侧视图 —— 下颌线自然过渡到脖子、
+后脑曲线连续，无台阶或前后错位。
+
+## 头身装配：权威定位 + 验收逻辑（最终版）
+
+### 1. 定位问题：读 myHs2 的加载链路
+| 环节 | 位置 | 关键内容 |
+| --- | --- | --- |
+| 装配公式 | `app.js attachRigidPart()` | `local = R_golden · Mlocal⁻¹`，注释：**"用 golden 把 mesh 级装配钉死"** |
+| golden 数据 | `hs2core/ref_head/head_ref.json` | head 的 R = 纯缩放 0.01（**相对 cf_J_Head_s 无旋转无平移**）；hair = `T(0,0.05,0)·Rx(-90°)` |
+| 换基 | `computeChangeOfBasis()` | `B_q = restWorldQ[Hips] × BASE_Q[Hips]⁻¹`（补偿导入器轴差异） |
+| 权威骨架 | `hs2core/ref/skeleton.json` | `cf_J_Head_s` = origin **(0, 1.5935, −0.023)**，basis **单位阵** |
+| 轴约定 | `docs/head_body_merge.md` §2.3 | "Blender 侧 **body=RotX(180°)、head=RotX(90°)**" → 必须用 golden，不能自己拼 |
+
+### 2. Blender oracle（本机实测，作为期望值来源）
+用 Blender 导入原版 `head.fbx` 量得：
+- 网格对象矩阵 = `0.01·Rx(180°)`
+- 独立世界 AABB = x±0.0883, y[−0.1798, 0.0344], z[−0.1121, 0.0741] ⇒ **中心 (0, −0.0727, −0.0190)**
+- 按 golden `head_world = boneWorld · Rx(180) · 独立世界` ⇒ 相对头骨期望偏移 **(0, +0.0727, +0.019)**
+
+### 3. 验收检查逻辑（已内置，屏幕可见 + 可独立跑）
+面板显示在捏人界面顶部；也可命令行：
+```bash
+godot --headless --path . -s tools/acceptance.gd
+```
+| 项 | 判据 | 阈值 |
+| --- | --- | --- |
+| **A 头身装配** | 头模渲染 AABB 中心 − 头骨位置，与 oracle 期望偏移比较 | < 30 mm |
+| **B 颈重叠** | 身体顶 − 头模底 | 10 ~ 120 mm |
+| **C 头高** | 头模渲染高度 | 180 ~ 240 mm |
+| 版本号 | 面板首行 `MERGE_REV` | 用来确认跑的是哪一版 |
+
+**实测结果（全部 PASS）**：
+```
+版本 GOLDEN-ONLY rev2025-09-19
+A 头中心偏移 (-0.000, 0.073, 0.019) 期望 (0.000, 0.073, 0.019) 误差 0 mm  PASS
+B 颈重叠 83 mm  PASS
+C 头高 212 mm  PASS
+结论: 全部 PASS
+```
+
+### 4. 实现（唯一权威来源）
+- `A_head = bone_p`（头骨 rest 在渲染空间的变换）；`A_hair = A_head · T(0,0.05,0) · Rx(-90°)`
+- `rest = bind⁻¹`、`bind` 不动 ⇒ 静止渲染 = `A · v_mesh`
+- 顶点骨骼序号重映射（= JS `remapSkinIndex`）
+- **已删除全部人工 seam 平移**：头身相对位置由 golden 唯一确定
+
+> 之前"一轮轮凑却看不出变化"的原因：头身相对位置本来就在权威位置上，
+> 那些 `seam_fix` 平移（−0.085 / −0.050 / …）都是在**偏离** golden，所以每次"修完"又回到原样。
+
+## 头发对齐修复（与头部同一类问题：相对装配增量写错轴）
+
+### 1. 从 golden 推导头发的相对装配增量
+golden `head_ref.json` 给的是**各部件相对 cf_J_Head_s** 的矩阵：
+- head：`R_gold = 0.01·I`（无旋转无平移）
+- hair_f / hair_b：`R_gold = T(0, 0.05, 0)·Rx(-90°)·0.01`
+
+⇒ 头发相对**头部**的局部关系 = `R_gold_head⁻¹ · R_gold_hair = T(0, 0.05, 0)·Rx(-90°)`
+（在 **mesh 局部空间**，Blender 侧；这与 `app.js` 里 `HAIR_CORR = T(0,-0.05,0)·Rx(-90°)` 一致）。
+
+换算到本工程坐标系（网格→渲染空间的轴转换 C = Rx(-90°)：(x,y,z)→(x,z,-y)）后，
+**相对增量 = T(0, 0, +0.05) · Rx(-90°)** —— 平移是 **z 轴 +5cm**。
+
+### 2. 之前的错误
+代码里写成了 `T(0, +0.05, 0)`（**平移写在了 y 轴**），于是整套头发整体偏 5cm，
+表现就是"头和脖子对齐了、头发没对齐"。
+
+### 3. 验收（新增 A2 项，判据同样来自 Blender oracle + golden）
+| 部件 | 实测相对头骨偏移 | oracle 期望 | 误差 |
+| --- | --- | --- | --- |
+| hair_f | (0.002, 0.063, 0.063) | (0.002, 0.063, 0.064) | **1 mm PASS** |
+| hair_b | (0.003, −0.093, −0.009) | (0.004, −0.093, −0.010) | **1 mm PASS** |
+
+期望值算法：Blender 导入 `hair_f.fbx / hair_b.fbx` 得独立世界 AABB 中心，
+乘 golden 的 `T(0,0.05,0)·Rx(90)`，再减头骨位置。命令行 `-s tools/acceptance.gd` 可复跑。
+
+> 教训：**头发不是"看着调"，它和头部一样有权威矩阵**；写错任何一轴都会整体偏移。
+> 现在 head / hair_f / hair_b 三项都在 1mm 内，且都有机器判据。
+
+## 界面：中文分类名 + 头发管理

@@ -1,0 +1,52 @@
+[gd_scene load_steps=9 format=3 uid="uid://bph24dlvf8y3t"]
+
+[ext_resource type="PackedScene" uid="uid://mvxt3ycdaera" path="res://Models/Eye/realistic_eye.glb" id="1_ka5bq"]
+[ext_resource type="Shader" uid="uid://2k5w43ebmdbe" path="res://HumanShaders/eye_shader.gdshader" id="2_50seh"]
+[ext_resource type="Texture2D" uid="uid://bq54fmu5xgksk" path="res://HumanShaders/Resources/Eye/eye_iris_diff.png" id="3_btb5o"]
+[ext_resource type="Texture2D" uid="uid://bcfgtc350v4n6" path="res://HumanShaders/Resources/Eye/eye_iris_nrm.png" id="4_b431s"]
+[ext_resource type="Texture2D" uid="uid://0gyhyfjxoap5" path="res://HumanShaders/Resources/Eye/eye_iris_parallax.png" id="5_73mwi"]
+[ext_resource type="Texture2D" uid="uid://bye2oqplgx3f7" path="res://HumanShaders/Resources/Eye/eye_sclera_diff.png" id="5_poceh"]
+[ext_resource type="Texture2D" uid="uid://cfttb0ix0yoes" path="res://HumanShaders/Resources/Eye/eye_sclera_nrm.png" id="6_d17pp"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_foaae"]
+render_priority = 0
+shader = ExtResource("2_50seh")
+shader_parameter/sclera_albedo = Color(1, 1, 1, 1)
+shader_parameter/iris_albedo = Color(1, 1, 1, 1)
+shader_parameter/sclera_albedo_texture = ExtResource("5_poceh")
+shader_parameter/iris_albedo_texture = ExtResource("3_btb5o")
+shader_parameter/sclera_normal_texture = ExtResource("6_d17pp")
+shader_parameter/iris_normal_texture = ExtResource("4_b431s")
+shader_parameter/normal_strength = 1.0
+shader_parameter/iris_scale = 2.5
+shader_parameter/roughness = 0.1
+shader_parameter/specular = 0.5
+shader_parameter/metallic = 0.0
+shader_parameter/texture_heightmap = ExtResource("5_73mwi")
+shader_parameter/heightmap_scale = 31.8
+shader_parameter/heightmap_min_layers = 8
+shader_parameter/heightmap_max_layers = 32
+shader_parameter/heightmap_flip = Vector2(1, 1)
+shader_parameter/subsurface_scattering = true
+shader_parameter/use_noise = false
+shader_parameter/subsurface_scattering_strength = 0.4
+shader_parameter/uv1_scale = Vector3(1, 1, 1)
+shader_parameter/uv1_offset = Vector3(0, 0, 0)
+shader_parameter/uv2_scale = Vector3(1, 1, 1)
+shader_parameter/uv2_offset = Vector3(0, 0, 0)
+
+[node name="Node3D" type="Node3D"]
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.8260984, -0.31430382, 0.4677334, 0, 0.83001226, 0.5577451, -0.5635259, -0.46075234, 0.6856718, 0, 0, 0)
+shadow_enabled = true
+directional_shadow_max_distance = 1.0
+
+[node name="realistic_eye" parent="." instance=ExtResource("1_ka5bq")]
+transform = Transform3D(25, 0, 0, 0, 25, 0, 0, 0, 25, 0, 0, 0)
+
+[node name="Eye - Realistic_001" parent="realistic_eye" index="0"]
+cast_shadow = 0
+surface_material_override/0 = SubResource("ShaderMaterial_foaae")
+
+[editable path="realistic_eye"]

@@ -1,0 +1,31 @@
+# 默认自动识别文本
+* text=auto eol=lf
+
+# 游戏原版数据/资产：保持字节原样（不要做换行转换）
+hs2/data/** -text
+*.csv -text -diff
+*.txt -text -diff
+*.TGA -text -diff
+*.tga -text -diff
+*.png -text -diff
+*.glb -text -diff
+*.fbx -text -diff
+*.vrm -text -diff
+*.gltf -text -diff
+*.uid text eol=lf
+*.tscn text eol=lf
+*.godot text eol=lf
+*.gd text eol=lf
+*.gdshader text eol=lf
+*.tres text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.glb filter=lfs diff=lfs merge=lfs -text
+*.png filter=lfs diff=lfs merge=lfs -text
+*.jpg filter=lfs diff=lfs merge=lfs -text
+*.jpeg filter=lfs diff=lfs merge=lfs -text
+*.TGA filter=lfs diff=lfs merge=lfs -text
+*.tga filter=lfs diff=lfs merge=lfs -text
+*.vrm filter=lfs diff=lfs merge=lfs -text
+*.fbx filter=lfs diff=lfs merge=lfs -text
+*.gltf filter=lfs diff=lfs merge=lfs -text

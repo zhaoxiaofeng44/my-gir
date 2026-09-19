@@ -1,0 +1,695 @@
+[gd_scene load_steps=19 format=3 uid="uid://cx3ke36luq2sr"]
+
+[ext_resource type="ArrayMesh" uid="uid://dgaq4f263bcpf" path="res://Models/HumanHead/InfiniteScan/Infinite-Level_02.OBJ" id="1_ahks5"]
+[ext_resource type="Texture2D" uid="uid://bcnq4b8ig3q2t" path="res://Resources/LUTs/pp_colorcorrection_1.tres" id="1_qfyww"]
+[ext_resource type="Texture2D" uid="uid://bia04147fvbed" path="res://Resources/HDRI/reading_room_4k.hdr" id="1_xhaxv"]
+[ext_resource type="Script" uid="uid://b40e0c3m2d0ks" path="res://Scripts/Visualizer/auto_rotate.gd" id="2_jqh26"]
+[ext_resource type="Script" uid="uid://3fqhmlbfjxu8" path="res://Scripts/Visualizer/head_visuas.gd" id="4_6cvmo"]
+[ext_resource type="PackedScene" uid="uid://c1to4ajlo0oyl" path="res://Models/HumanHead/EmilyHeadScan/Emili_Head_Optimized.glb" id="5_kre5v"]
+[ext_resource type="Material" uid="uid://bcow8qj5qfkbh" path="res://Models/HumanHead/EmilyHeadScan/Materials/smat_emily_skin.tres" id="6_qfyww"]
+[ext_resource type="Material" uid="uid://bok8104w80smq" path="res://Models/HumanHead/InfiniteScan/Materials/smat_infinite_skin.tres" id="8_fw5fm"]
+[ext_resource type="PackedScene" uid="uid://bffxq2620bka5" path="res://Models/Monster/monster_1.glb" id="10_qfyww"]
+[ext_resource type="Script" uid="uid://2rlq2dosu6m1" path="res://Scripts/Visualizer/ui_main.gd" id="10_wtu8x"]
+[ext_resource type="Script" uid="uid://c6e14a85jebsc" path="res://Scripts/Visualizer/face_demo_camera.gd" id="11_0jrl4"]
+[ext_resource type="Texture2D" uid="uid://ct6xo0he0ieiu" path="res://splash_screen.png" id="13_qkn5b"]
+[ext_resource type="Script" uid="uid://boijn2aycwjpd" path="res://Scripts/Visualizer/mini_debugger.gd" id="14_a2qj3"]
+[ext_resource type="Script" uid="uid://bwu05et5myu5m" path="res://Scripts/Visualizer/lighting_setup.gd" id="14_yjmae"]
+
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_hqxp2"]
+panorama = ExtResource("1_xhaxv")
+
+[sub_resource type="Sky" id="Sky_sa387"]
+sky_material = SubResource("PanoramaSkyMaterial_hqxp2")
+
+[sub_resource type="Environment" id="Environment_styh2"]
+background_mode = 2
+background_color = Color(0.654232, 0.654232, 0.654232, 1)
+background_energy_multiplier = 0.5
+sky = SubResource("Sky_sa387")
+sky_rotation = Vector3(0, 1.5708, 0)
+ambient_light_color = Color(0.38170326, 0.38170323, 0.38170323, 1)
+tonemap_mode = 3
+ssr_fade_in = 1.6818e-05
+ssr_fade_out = 0.5
+ssr_depth_tolerance = 0.11
+ssil_enabled = true
+ssil_radius = 0.1
+ssil_intensity = 1.25
+ssil_normal_rejection = 0.8
+glow_enabled = true
+glow_levels/1 = 1.0
+glow_levels/2 = 1.0
+glow_levels/4 = 1.0
+glow_levels/6 = 1.0
+glow_levels/7 = 1.0
+glow_normalized = true
+glow_intensity = 0.5
+glow_blend_mode = 1
+glow_hdr_scale = 1.4
+fog_light_energy = 0.83
+fog_sun_scatter = 1.0
+fog_density = 0.2079
+volumetric_fog_density = 0.005
+volumetric_fog_gi_inject = 0.07
+adjustment_enabled = true
+adjustment_color_correction = ExtResource("1_qfyww")
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_0iug7"]
+auto_exposure_enabled = true
+auto_exposure_scale = 0.12
+auto_exposure_speed = 1.0
+dof_blur_far_distance = 0.52
+dof_blur_far_transition = 0.15
+dof_blur_amount = 0.2
+auto_exposure_min_sensitivity = 12.0
+auto_exposure_max_sensitivity = 550.0
+
+[node name="Node3D" type="Node3D"]
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch = true
+
+[node name="SubViewport" type="SubViewport" parent="SubViewportContainer"]
+handle_input_locally = false
+use_debanding = true
+scaling_3d_scale = 1.0
+anisotropic_filtering_level = 4
+positional_shadow_atlas_size = 16384
+size = Vector2i(1920, 1080)
+size_2d_override_stretch = true
+render_target_update_mode = 4
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="SubViewportContainer/SubViewport"]
+unique_name_in_owner = true
+environment = SubResource("Environment_styh2")
+camera_attributes = SubResource("CameraAttributesPractical_0iug7")
+
+[node name="Node3D" type="Node3D" parent="SubViewportContainer/SubViewport"]
+transform = Transform3D(0.969016, 0, -0.246999, 0, 1, 0, 0.246999, 0, 0.969016, 0, 0, 0)
+
+[node name="Camera3D" type="Camera3D" parent="SubViewportContainer/SubViewport/Node3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.201, 0.593)
+fov = 25.0
+script = ExtResource("11_0jrl4")
+min_fov = 2.0
+movement_sensitivity = 3.0
+
+[node name="Head" type="Node3D" parent="SubViewportContainer/SubViewport" node_paths=PackedStringArray("world_env")]
+script = ExtResource("2_jqh26")
+rotation_sensitivity = 0.1
+world_env = NodePath("../WorldEnvironment")
+
+[node name="HeadVisuals" type="Node3D" parent="SubViewportContainer/SubViewport/Head" node_paths=PackedStringArray("mesh", "animation_player")]
+script = ExtResource("4_6cvmo")
+mesh = NodePath("Emili_Head_Optimized/Armature/Skeleton3D/Emily_Head")
+material_index = 1
+materials = Array[int]([0, 1])
+animation_player = NodePath("Emili_Head_Optimized/AnimationPlayer")
+standard_material_3d = ExtResource("6_qfyww")
+
+[node name="Emili_Head_Optimized" parent="SubViewportContainer/SubViewport/Head/HeadVisuals" instance=ExtResource("5_kre5v")]
+transform = Transform3D(0.0119473, 0.000345611, 0.00106945, -0.000346993, 0.011995, 2.4025e-11, -0.001069, -3.09241e-05, 0.0119523, -0.00207924, 0.122231, 0.0265137)
+
+[node name="Emily_Face_Details" parent="SubViewportContainer/SubViewport/Head/HeadVisuals/Emili_Head_Optimized/Armature/Skeleton3D" index="0"]
+extra_cull_margin = 50.0
+blend_shapes/browDownLeft = 0.00021188644
+blend_shapes/browDownRight = 0.00021188644
+blend_shapes/eyeLookInRight = 0.15695164
+blend_shapes/eyeLookOutLeft = 0.15694329
+blend_shapes/eyeLookUpLeft = 0.23467557
+blend_shapes/eyeLookUpRight = 0.234688
+blend_shapes/jawLeft = 0.018227927
+blend_shapes/mouthFrownRight = 0.008502184
+blend_shapes/mouthRollLower = 0.00010837587
+
+[node name="Emily_Head" parent="SubViewportContainer/SubViewport/Head/HeadVisuals/Emili_Head_Optimized/Armature/Skeleton3D" index="1"]
+blend_shapes/browDownLeft = 0.00021188644
+blend_shapes/browDownRight = 0.00021188644
+blend_shapes/eyeLookInRight = 0.15695164
+blend_shapes/eyeLookOutLeft = 0.15694329
+blend_shapes/eyeLookUpLeft = 0.23467557
+blend_shapes/eyeLookUpRight = 0.234688
+blend_shapes/jawLeft = 0.018227927
+blend_shapes/mouthFrownRight = 0.008502184
+blend_shapes/mouthRollLower = 0.00010837587
+
+[node name="Eye - Realistic_002" parent="SubViewportContainer/SubViewport/Head/HeadVisuals/Emili_Head_Optimized/Armature/Skeleton3D" index="2"]
+cast_shadow = 0
+
+[node name="AnimationPlayer" parent="SubViewportContainer/SubViewport/Head/HeadVisuals/Emili_Head_Optimized" index="1"]
+callback_mode_process = 2
+autoplay = "ArmatureAction_002"
+
+[node name="Infinite-level02" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/Head/HeadVisuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.23, 0.0632671)
+visible = false
+mesh = ExtResource("1_ahks5")
+skeleton = NodePath("../../../../..")
+surface_material_override/0 = ExtResource("8_fw5fm")
+
+[node name="monster_1" parent="SubViewportContainer/SubViewport/Head/HeadVisuals" instance=ExtResource("10_qfyww")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.436, -0.051)
+visible = false
+
+[node name="Lighting" type="Node3D" parent="SubViewportContainer/SubViewport" node_paths=PackedStringArray("world_env")]
+script = ExtResource("2_jqh26")
+use_right_click = true
+rotation_sensitivity = 0.2
+world_env = NodePath("../WorldEnvironment")
+
+[node name="LightingSetup1" type="Node3D" parent="SubViewportContainer/SubViewport/Lighting"]
+visible = false
+script = ExtResource("14_yjmae")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="SubViewportContainer/SubViewport/Lighting/LightingSetup1"]
+transform = Transform3D(0.6858184, -0.43289593, 0.5850252, 0, 0.80385697, 0.5948229, -0.72777283, -0.40794045, 0.5512998, 0, 0, 0)
+light_energy = 2.5
+shadow_enabled = true
+shadow_bias = 0.001
+shadow_blur = 2.0
+directional_shadow_mode = 0
+directional_shadow_split_1 = 0.5
+directional_shadow_split_2 = 0.3
+directional_shadow_split_3 = 0.6
+directional_shadow_max_distance = 0.8
+directional_shadow_pancake_size = 15.0
+
+[node name="DirectionalLight3D4" type="DirectionalLight3D" parent="SubViewportContainer/SubViewport/Lighting/LightingSetup1"]
+transform = Transform3D(-0.33709532, -0.5600082, 0.7568076, 0, 0.80385697, 0.5948229, -0.9414705, 0.20051202, -0.27097642, 0, 0, 0)
+light_energy = 8.0
+shadow_enabled = true
+shadow_bias = 0.001
+shadow_blur = 4.0
+directional_shadow_mode = 0
+directional_shadow_split_1 = 0.5
+directional_shadow_split_2 = 0.3
+directional_shadow_split_3 = 0.6
+directional_shadow_max_distance = 1.5
+
+[node name="DirectionalLight3D2" type="DirectionalLight3D" parent="SubViewportContainer/SubViewport/Lighting/LightingSetup1"]
+transform = Transform3D(0.1554, -0.905919, -0.393905, 7.61903e-09, -0.398749, 0.91706, -0.987852, -0.142511, -0.0619656, 0, 0, 0)
+light_color = Color(0.587668, 0.686282, 0.761403, 1)
+light_energy = 4.0
+light_specular = 0.0
+shadow_enabled = true
+shadow_bias = 0.001
+shadow_blur = 5.0
+directional_shadow_mode = 0
+directional_shadow_max_distance = 1.7
+
+[node name="DirectionalLight3D5" type="DirectionalLight3D" parent="SubViewportContainer/SubViewport/Lighting/LightingSetup1"]
+transform = Transform3D(0.91982186, -0.08825668, -0.38228145, -8.5182165e-08, -0.97436976, 0.22495103, -0.39233723, -0.20691472, -0.8962465, 0, 0, 0)
+light_color = Color(0.587668, 0.686282, 0.761403, 1)
+light_energy = 4.0
+light_specular = 0.0
+shadow_enabled = true
+shadow_bias = 0.002
+shadow_blur = 5.0
+directional_shadow_mode = 0
+directional_shadow_max_distance = 1.7
+
+[node name="DirectionalLight3D3" type="DirectionalLight3D" parent="SubViewportContainer/SubViewport/Lighting/LightingSetup1"]
+transform = Transform3D(0.99556255, -0.089502275, -0.029081076, 0, 0.3090168, -0.9510569, 0.09410837, 0.94683516, 0.30764565, 0, 0, 0)
+light_color = Color(0.84982, 0.611376, 0.445335, 1)
+light_energy = 0.4
+light_specular = 0.0
+shadow_enabled = true
+shadow_bias = 0.001
+shadow_blur = 5.0
+directional_shadow_mode = 0
+directional_shadow_max_distance = 1.6
+
+[node name="LightingSetup2" type="Node3D" parent="SubViewportContainer/SubViewport/Lighting"]
+visible = false
+script = ExtResource("14_yjmae")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="SubViewportContainer/SubViewport/Lighting/LightingSetup2"]
+transform = Transform3D(0.504799, -0.513473, 0.693919, 2.32283e-09, 0.803857, 0.594823, -0.863237, -0.300266, 0.405786, 0, 0, 0)
+light_energy = 4.0
+shadow_enabled = true
+shadow_bias = 0.001
+shadow_blur = 4.0
+directional_shadow_split_2 = 0.3
+directional_shadow_split_3 = 0.6
+directional_shadow_max_distance = 1.0
+
+[node name="DirectionalLight3D2" type="DirectionalLight3D" parent="SubViewportContainer/SubViewport/Lighting/LightingSetup2"]
+transform = Transform3D(0.1554, -0.905919, -0.393905, 7.61903e-09, -0.398749, 0.91706, -0.987852, -0.142511, -0.0619656, 0, 0, 0)
+light_color = Color(0.587668, 0.686282, 0.761403, 1)
+light_specular = 0.0
+shadow_enabled = true
+shadow_bias = 0.001
+shadow_blur = 10.0
+directional_shadow_max_distance = 4.0
+
+[node name="DirectionalLight3D3" type="DirectionalLight3D" parent="SubViewportContainer/SubViewport/Lighting/LightingSetup2"]
+transform = Transform3D(0.933205, 0.337674, 0.122903, -5.17512e-09, 0.34202, -0.939693, -0.359346, 0.876925, 0.319175, 0, 0, 0)
+light_color = Color(0.84982, 0.611376, 0.445335, 1)
+light_energy = 0.8
+light_specular = 0.0
+shadow_enabled = true
+shadow_bias = 0.001
+shadow_blur = 10.0
+directional_shadow_max_distance = 4.0
+
+[node name="LightingSetup3" type="Node3D" parent="SubViewportContainer/SubViewport/Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.0632671)
+script = ExtResource("14_yjmae")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="SubViewportContainer/SubViewport/Lighting/LightingSetup3"]
+transform = Transform3D(0.644124, 0.540881, -0.540881, 6.18173e-08, -0.707107, -0.707107, -0.764921, 0.455464, -0.455465, 0.391, 0.406, -0.121)
+light_energy = 1.5
+shadow_enabled = true
+shadow_bias = 0.005
+shadow_blur = 2.0
+
+[node name="SpotLight3D" type="SpotLight3D" parent="SubViewportContainer/SubViewport/Lighting/LightingSetup3"]
+transform = Transform3D(0.81815, -0.40659, 0.40659, 0, 0.707107, 0.707107, -0.575005, -0.578519, 0.578519, 0.348003, 0.521764, 0.445228)
+light_energy = 0.5
+shadow_enabled = true
+shadow_bias = 0.0
+shadow_normal_bias = 2.0
+shadow_reverse_cull_face = true
+shadow_blur = 4.0
+
+[node name="OmniLight3D2" type="OmniLight3D" parent="SubViewportContainer/SubViewport/Lighting/LightingSetup3"]
+transform = Transform3D(0.644124, 0.540881, -0.540881, 6.18173e-08, -0.707107, -0.707107, -0.764921, 0.455464, -0.455465, -0.532522, 0.335, -1.15571)
+light_energy = 0.5
+shadow_enabled = true
+shadow_bias = 0.005
+shadow_blur = 1.649
+
+[node name="LightingSetup4" type="Node3D" parent="SubViewportContainer/SubViewport/Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.0632671)
+visible = false
+script = ExtResource("14_yjmae")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="SubViewportContainer/SubViewport/Lighting/LightingSetup4"]
+transform = Transform3D(0.644124, 0.540881, -0.540881, 0, 0.707107, 0.707107, 0.764921, -0.455464, 0.455465, 0.526344, 0.406, -0.265612)
+light_color = Color(1, 0.105882, 0.45098, 1)
+shadow_enabled = true
+shadow_bias = 0.005
+
+[node name="SpotLight3D" type="SpotLight3D" parent="SubViewportContainer/SubViewport/Lighting/LightingSetup4"]
+transform = Transform3D(0.977501, 0.149151, -0.149152, 1.37444e-08, 0.707107, 0.707107, 0.210932, -0.691197, 0.691198, -0.139679, 0.521764, 0.418311)
+light_color = Color(0, 0.337255, 1, 1)
+shadow_enabled = true
+shadow_bias = 0.001
+shadow_normal_bias = 0.5
+shadow_blur = 1.3
+
+[node name="OmniLight3D2" type="OmniLight3D" parent="SubViewportContainer/SubViewport/Lighting/LightingSetup4"]
+transform = Transform3D(0.644124, 0.540881, -0.540881, 0, 0.707107, 0.707107, 0.764921, -0.455464, 0.455465, -0.374961, 0.335, -0.510979)
+light_color = Color(0, 1, 0.784314, 1)
+light_energy = 0.5
+shadow_enabled = true
+shadow_bias = 0.005
+shadow_blur = 1.649
+
+[node name="LightingSetup5" type="Node3D" parent="SubViewportContainer/SubViewport/Lighting"]
+transform = Transform3D(0.995396, 0, -0.095846, 0, 1, 0, 0.095846, 0, 0.995396, 0, 0, 0.0632671)
+visible = false
+script = ExtResource("14_yjmae")
+
+[node name="SpotLight3D" type="SpotLight3D" parent="SubViewportContainer/SubViewport/Lighting/LightingSetup5"]
+transform = Transform3D(1, -1.49012e-08, 2.23517e-08, 0, 0.627963, 0.778243, -2.98023e-08, -0.778243, 0.627963, 0.00143928, 0.358398, 0.0732565)
+shadow_enabled = true
+shadow_bias = 0.001
+shadow_blur = 3.0
+spot_range = 2.0
+
+[node name="UI" type="Control" parent="."]
+unique_name_in_owner = true
+process_mode = 3
+z_index = 1
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("10_wtu8x")
+
+[node name="Panel" type="Panel" parent="UI"]
+self_modulate = Color(0, 0, 0, 0.745098)
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 0.18
+anchor_bottom = 1.0
+offset_right = -0.6000061
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="UI/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_top = 50
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_bottom = 50
+
+[node name="ScrollContainer" type="ScrollContainer" parent="UI/Panel/MarginContainer"]
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/Panel/MarginContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ResetModel" type="Button" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+text = "Reset Model Rotation"
+
+[node name="ResetCamera" type="Button" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+text = "Reset Camera"
+
+[node name="ResetLights" type="Button" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+text = "Reset Lighting Setup"
+
+[node name="HSeparator" type="HSeparator" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 25
+
+[node name="LightingSetupText" type="Label" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+text = "Lighting Setup
+"
+horizontal_alignment = 1
+
+[node name="LightingSetupButtons" type="HFlowContainer" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="1" type="Button" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/LightingSetupButtons"]
+custom_minimum_size = Vector2(30, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "1"
+
+[node name="2" type="Button" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/LightingSetupButtons"]
+custom_minimum_size = Vector2(30, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "2"
+
+[node name="3" type="Button" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/LightingSetupButtons"]
+custom_minimum_size = Vector2(30, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "3"
+
+[node name="4" type="Button" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/LightingSetupButtons"]
+custom_minimum_size = Vector2(30, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "4"
+
+[node name="5" type="Button" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/LightingSetupButtons"]
+custom_minimum_size = Vector2(30, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "5"
+
+[node name="CastShadows" type="CheckButton" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+text = "Cast Shadows"
+
+[node name="HSeparator2" type="HSeparator" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 25
+
+[node name="MaterialText" type="Label" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+text = "Material
+"
+horizontal_alignment = 1
+
+[node name="StandardMaterial" type="CheckButton" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Switch to the StandardMaterial3D version (for comparison reasons)."
+text = "Use StandardMaterial"
+
+[node name="Spacing6" type="Label" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 5
+text = "
+"
+horizontal_alignment = 1
+
+[node name="SkinColor" type="Button" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+toggle_mode = true
+text = "Skin Color"
+
+[node name="SkinColorPicker" type="ColorPicker" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+edit_alpha = false
+can_add_swatches = false
+color_modes_visible = false
+sliders_visible = false
+presets_visible = false
+
+[node name="Spacing" type="Label" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 5
+text = "
+"
+horizontal_alignment = 1
+
+[node name="Roughness" type="HBoxContainer" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="RoughnessText" type="Label" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/Roughness"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Roughness"
+
+[node name="RoughnessSlider" type="HSlider" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/Roughness"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.05
+
+[node name="Spacing2" type="Label" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 5
+text = "
+"
+horizontal_alignment = 1
+
+[node name="SubsurfaceScattering" type="CheckButton" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+text = "Subsurface Scattering"
+
+[node name="SSSNoise" type="CheckButton" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "If true, the subsurface Scattering strength will be multiplied by an interleaved gradient noise,
+hiding the visible \"layers\" of the effect without looking too noisy."
+button_pressed = true
+text = "Use IG Noise"
+
+[node name="Spacing3" type="Label" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 5
+text = "
+"
+horizontal_alignment = 1
+
+[node name="SubSurf" type="HBoxContainer" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+tooltip_text = "Subsurface Scattering Strength"
+
+[node name="SubSurfText" type="Label" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/SubSurf"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "SSS Strength"
+
+[node name="SubSurfSlider" type="HSlider" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/SubSurf"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 2.0
+step = 0.05
+
+[node name="Spacing4" type="Label" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 5
+text = "
+"
+horizontal_alignment = 1
+
+[node name="TintedShadow" type="CheckButton" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "If true, add a slight reddish tint to the shadow penumbra.
+
+It isn't exactly realistic, but it can complement the subsurface 
+scattering and make the shadows look more interesting. It
+can also serve as a more lightweigh alternative to screen-space
+subsurface scattering."
+text = "Tinted Shadow Penumbra"
+
+[node name="Spacing5" type="Label" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 5
+text = "
+"
+horizontal_alignment = 1
+
+[node name="Lightwarp" type="CheckButton" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "If true, use the old Valve's Lightwarp inspired
+technique to fake skin translucency.
+
+The new \"Hybrid Map\" technique is better at faking
+skin translucency by using the same normal map 
+at different mipmap levels for each color channel."
+text = "Lightwarp Fallof (Deprecated)"
+
+[node name="Translucency" type="CheckButton" parent="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "If true, uses a fake translucency effect.
+
+It is important to notice that, since this effect 
+has to be rendered on top of the shadows, it 
+doesn't consider shadows at all. This can cause
+a problem where the object seems to be
+glowing in the dark, so it has to be used carefully."
+text = "Translucency"
+
+[node name="Control" type="Control" parent="UI"]
+layout_mode = 1
+anchor_left = 0.18900001
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 0.11999512
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="MiniDebuggerPanel" type="Panel" parent="UI/Control"]
+self_modulate = Color(0, 0, 0, 0.392157)
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="UI/Control/MiniDebuggerPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="RichTextLabel" type="RichTextLabel" parent="UI/Control/MiniDebuggerPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/outline_size = 0
+theme_override_font_sizes/normal_font_size = 12
+bbcode_enabled = true
+text = "Mini Debugger"
+script = ExtResource("14_a2qj3")
+
+[node name="AnimationPlayer" type="Panel" parent="UI/Control"]
+self_modulate = Color(0, 0, 0, 0.392157)
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 205.0
+offset_top = -60.0
+offset_right = -205.0
+grow_horizontal = 2
+grow_vertical = 0
+pivot_offset = Vector2(3.0517578e-05, 40)
+mouse_filter = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="UI/Control/AnimationPlayer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="HBoxContainer" type="HBoxContainer" parent="UI/Control/AnimationPlayer/MarginContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="PlayButton" type="Button" parent="UI/Control/AnimationPlayer/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(75, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Play"
+
+[node name="AnimationSlider" type="HSlider" parent="UI/Control/AnimationPlayer/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 1
+max_value = 1.0
+step = 0.0010000000038417
+
+[node name="SplashScreen" type="TextureRect" parent="UI"]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -469.33337
+offset_top = -264.0
+offset_right = 469.33337
+offset_bottom = 264.0
+grow_horizontal = 2
+grow_vertical = 2
+pivot_offset = Vector2(960, 540)
+texture = ExtResource("13_qkn5b")
+expand_mode = 1
+
+[connection signal="pressed" from="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/ResetModel" to="SubViewportContainer/SubViewport/Head/HeadVisuals" method="_on_reset_model_pressed"]
+[connection signal="pressed" from="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/ResetCamera" to="SubViewportContainer/SubViewport/Node3D/Camera3D" method="_on_reset_camera_pressed"]
+[connection signal="pressed" from="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/ResetLights" to="SubViewportContainer/SubViewport/Lighting/LightingSetup2" method="_on_reset_lights_pressed"]
+[connection signal="toggled" from="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/CastShadows" to="SubViewportContainer/SubViewport/Lighting/LightingSetup2" method="_on_cast_shadows_toggled"]
+[connection signal="toggled" from="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/SkinColor" to="SubViewportContainer/SubViewport/Head/HeadVisuals" method="_on_skin_color_toggled"]
+[connection signal="color_changed" from="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/SkinColorPicker" to="SubViewportContainer/SubViewport/Head/HeadVisuals" method="_on_skin_color_picker_color_changed"]
+[connection signal="toggled" from="UI/Panel/MarginContainer/ScrollContainer/VBoxContainer/SubsurfaceScattering" to="SubViewportContainer/SubViewport/Lighting/LightingSetup2" method="_on_cast_shadows_toggled"]
+
+[editable path="SubViewportContainer/SubViewport/Head/HeadVisuals/Emili_Head_Optimized"]
+[editable path="SubViewportContainer/SubViewport/Head/HeadVisuals/monster_1"]

@@ -1,0 +1,123 @@
+[gd_scene load_steps=14 format=3]
+
+[ext_resource type="Shader" path="res://shaders/skin.gdshader" id="1"]
+[ext_resource type="Shader" path="res://shaders/eye.gdshader" id="2"]
+[ext_resource type="Shader" path="res://shaders/hair.gdshader" id="3"]
+[ext_resource type="Shader" path="res://shaders/cloth.gdshader" id="4"]
+
+[sub_resource type="ShaderMaterial" id="skin_mat"]
+render_priority = 0
+shader = ExtResource("1")
+shader_parameter/base_color = Color(0.95, 0.78, 0.7, 1)
+shader_parameter/roughness = 0.52
+shader_parameter/specular_amount = 0.4
+shader_parameter/subsurface_strength = 1.5
+shader_parameter/rim_intensity = 0.14
+shader_parameter/normal_strength = 0.6
+
+[sub_resource type="ShaderMaterial" id="eye_mat"]
+shader = ExtResource("2")
+shader_parameter/iris_color = Color(0.22, 0.42, 0.55, 1)
+shader_parameter/iris_size = 0.62
+shader_parameter/pupil_dilation = 0.25
+shader_parameter/iris_depth = 0.18
+shader_parameter/cornea_gloss = 1.0
+
+[sub_resource type="ShaderMaterial" id="hair_mat"]
+shader = ExtResource("3")
+shader_parameter/root_color = Color(0.12, 0.07, 0.05, 1)
+shader_parameter/tip_color = Color(0.55, 0.38, 0.22, 1)
+shader_parameter/alpha_scissor = 0.35
+shader_parameter/primary_power = 120.0
+shader_parameter/secondary_power = 28.0
+shader_parameter/translucency = 0.6
+
+[sub_resource type="ShaderMaterial" id="cloth_mat"]
+shader = ExtResource("4")
+shader_parameter/base_color = Color(0.35, 0.12, 0.18, 1)
+shader_parameter/roughness = 0.85
+shader_parameter/wind_amplitude = 0.03
+shader_parameter/wind_speed = 1.5
+
+[sub_resource type="SphereMesh" id="head_mesh"]
+radius = 0.12
+height = 0.24
+radial_segments = 64
+rings = 32
+
+[sub_resource type="SphereMesh" id="eye_mesh"]
+radius = 0.021
+height = 0.042
+radial_segments = 32
+rings = 16
+
+[sub_resource type="SphereMesh" id="hair_mesh"]
+radius = 0.135
+height = 0.34
+radial_segments = 48
+rings = 24
+
+[sub_resource type="PlaneMesh" id="cape_mesh"]
+size = Vector2(0.3, 0.45)
+subdivide_width = 12
+subdivide_height = 16
+
+[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
+sky_top_color = Color(0.25, 0.35, 0.5, 1)
+sky_horizon_color = Color(0.65, 0.6, 0.55, 1)
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_source = 3
+tonemap_mode = 2
+
+[node name="CharacterDemo" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, 0.25, -0.433013, 0, 0.866025, 0.5, 0.5, -0.433013, 0.75, 0, 2, 0)
+light_color = Color(1, 0.95, 0.88, 1)
+light_energy = 1.4
+shadow_enabled = true
+
+[node name="FillLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.866025, 0.2, 0.45, 0, 0.9, -0.4, -0.5, -0.35, -0.78, 0, 1.5, 0)
+light_color = Color(0.6, 0.7, 1, 1)
+light_energy = 0.35
+
+[node name="Camera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0.55)
+
+[node name="Character" type="Node3D" parent="."]
+
+[node name="Head" type="MeshInstance3D" parent="Character"]
+mesh = SubResource("head_mesh")
+surface_material_override/0 = SubResource("skin_mat")
+
+[node name="Hair" type="MeshInstance3D" parent="Character"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, -0.01)
+mesh = SubResource("hair_mesh")
+surface_material_override/0 = SubResource("hair_mat")
+
+[node name="EyeL" type="MeshInstance3D" parent="Character"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.045, 0.015, 0.105)
+mesh = SubResource("eye_mesh")
+surface_material_override/0 = SubResource("eye_mat")
+
+[node name="EyeR" type="MeshInstance3D" parent="Character"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.045, 0.015, 0.105)
+mesh = SubResource("eye_mesh")
+surface_material_override/0 = SubResource("eye_mat")
+
+[node name="Cape" type="MeshInstance3D" parent="Character"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, -0.1, -0.13)
+mesh = SubResource("cape_mesh")
+surface_material_override/0 = SubResource("cloth_mat")
+
+[node name="LODHelper" type="Node3D" parent="."]

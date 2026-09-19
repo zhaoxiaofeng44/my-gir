@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://dgaq4f263bcpf"
+path="res://.godot/imported/Infinite-Level_02.OBJ-23de3cd378bfc141b62a01b052c4b00c.mesh"
+
+[deps]
+
+files=["res://.godot/imported/Infinite-Level_02.OBJ-23de3cd378bfc141b62a01b052c4b00c.mesh"]
+
+source_file="res://addons/HumanShaders/Models/HumanHead/InfiniteScan/Infinite-Level_02.OBJ"
+dest_files=["res://.godot/imported/Infinite-Level_02.OBJ-23de3cd378bfc141b62a01b052c4b00c.mesh", "res://.godot/imported/Infinite-Level_02.OBJ-23de3cd378bfc141b62a01b052c4b00c.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false

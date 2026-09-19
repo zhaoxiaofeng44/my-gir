@@ -1,0 +1,17 @@
+# ── Godot 4 缓存 ──────────────────────────────
+.godot/
+/android/
+
+# ── 工具产物 ──────────────────────────────────
+.dsh-vision-router/
+
+# ── 未使用的大体积第三方内容（需要时见 RENDERING_README.md / hs2/README.md）──
+addons/TressFX-Godot/
+addons/HumanShaders/Models/Monster/
+addons/HumanShaders/Models/HumanHead/EmilyHeadScan/
+hs2/model/Animation/
+hs2/model/face_n.TGA
+hs2/model/cf_s_body_00_00_00-RGB24.png
+
+# ── 系统 ──────────────────────────────────────
+.DS_Store

@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cd595e05f67d74742b77989e0a9be54a, type: 3}
+  m_Name: BoneShapeDataSource
+  m_EditorClassIdentifier: 
+  FaceOldBoneNames: {fileID: 4900000, guid: 36f6499bcac54ed46ac90a86c35b32f2, type: 3}
+  FaceNewBoneNames: {fileID: 4900000, guid: 5b983ab0e6dfab34c86f50244b7ed2b2, type: 3}
+  FaceCategoryNames: {fileID: 4900000, guid: 0d120384e68d84147bf2fdc4ff9da35a, type: 3}
+  FaceCategoryMap: {fileID: 4900000, guid: 3a22c9ac16ec02447ae1054bf413ffaa, type: 3}
+  FaceKeyframes: {fileID: 4900000, guid: 48c405f25b4c09b48846bbc2cfb8a174, type: 3}
+  BodyOldBoneNames: {fileID: 4900000, guid: c0ef4df450c556e4395ca0727efa57fb, type: 3}
+  BodyNewBoneNames: {fileID: 4900000, guid: c29acbfe0b8952745b86ab8dc0162a21, type: 3}
+  BodyCategoryNames: {fileID: 4900000, guid: 3a7eae44113905645b7860a2a7372dcc, type: 3}
+  BodyCategoryMap: {fileID: 4900000, guid: bf7fceaae54f97c469fd67f408596109, type: 3}
+  BodyKeyframes: {fileID: 4900000, guid: 1f2dfd813c630d84b80d7d2db3bbff54, type: 3}
+  FaceBoneMappings: {fileID: 4900000, guid: 8118a78926148e644be5fbf304970cb0, type: 3}
+  BodyBoneMappings: {fileID: 4900000, guid: 33bf8348380c8e64c915e90297a0775d, type: 3}
