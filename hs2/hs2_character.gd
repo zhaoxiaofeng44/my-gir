@@ -12,6 +12,7 @@ const PARTS_ATTACH := ["head", "hair_f", "hair_b"]
 const POS_UNIT := 100.0   # 数据表位置单位（与 web 版 applyFaceMorphLegacy 一致）
 const HAIR_TINT := Color(0.80, 0.62, 0.45)   # HS2 发贴图为灰度+alpha，发色由材质决定
 const MERGE_REV := "GOLDEN-ONLY rev2025-09-19"   # 屏幕/日志可见，用来确认跑的是哪一版
+const HAIR_PHYSICS := preload("res://hs2/hair_physics.gd")
 
 var model_root: Node3D
 var main_sk: Skeleton3D
@@ -43,6 +44,10 @@ func _ready() -> void:
 		var m := _find_mesh(nm)
 		if m != null:
 			_hair_nodes.append(m)
+	_hair_physics = HAIR_PHYSICS.new()
+	_hair_physics.name = "HairPhysics"
+	add_child(_hair_physics)
+	_hair_physics.setup(main_sk)
 	_collect_rest()
 
 	for cid in shape_face.cat_map.keys():
@@ -286,6 +291,19 @@ func _build_ui() -> void:
 		cb.toggled.connect(func(on: bool): hn.visible = on)
 		row.add_child(cb)
 		box.add_child(row)
+	var lph := Label.new()
+	lph.text = "———— 头发物理 ————"
+	box.add_child(lph)
+	box.add_child(_mk_check("启用弹性", _hair_physics.enabled if _hair_physics else false, func(on: bool): if _hair_physics: _hair_physics.set_enabled(on)))
+	box.add_child(_mk_phys("刚度", 0.0, 1.0, _hair_physics.stiffness if _hair_physics else 0.35, func(v: float): if _hair_physics: _hair_physics.stiffness = v))
+	box.add_child(_mk_phys("阻尼", 0.0, 1.0, _hair_physics.drag if _hair_physics else 0.60, func(v: float): if _hair_physics: _hair_physics.drag = v))
+	box.add_child(_mk_phys("重力", 0.0, 1.0, _hair_physics.gravity if _hair_physics else 0.05, func(v: float): if _hair_physics: _hair_physics.gravity = v))
+	box.add_child(_mk_phys("风力", -15.0, 15.0, _hair_physics.wind if _hair_physics else 0.0, func(v: float): if _hair_physics: _hair_physics.wind = v))
+	box.add_child(_mk_phys("头碰撞半径", 0.0, 0.12, _hair_physics.head_collision_radius if _hair_physics else 0.0, func(v: float): if _hair_physics: _hair_physics.head_collision_radius = v))
+	var lreset := Button.new()
+	lreset.text = "重置头发物理"
+	lreset.pressed.connect(func(): if _hair_physics: _hair_physics.reset_physics())
+	box.add_child(lreset)
 	var l1 := Label.new()
 	l1.text = "———— 脸部（face）————"
 	box.add_child(l1)
@@ -338,6 +356,7 @@ var _acc_lines: Array = []
 var _face_names: PackedStringArray = PackedStringArray()
 var _body_names: PackedStringArray = PackedStringArray()
 var _hair_nodes: Array = []
+var _hair_physics: Node
 
 func _run_acceptance() -> void:
 	var lines: Array = []
@@ -629,3 +648,33 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if (event as InputEventKey).keycode == KEY_F:
 			_setup_camera()
+func _mk_check(label: String, value: bool, cb: Callable) -> CheckBox:
+	var c := CheckBox.new()
+	c.text = label
+	c.button_pressed = value
+	c.toggled.connect(cb)
+	return c
+
+func _mk_phys(label: String, lo: float, hi: float, value: float, cb: Callable) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var lbl := Label.new()
+	lbl.text = label
+	lbl.custom_minimum_size = Vector2(150, 0)
+	row.add_child(lbl)
+	var sl := HSlider.new()
+	sl.min_value = lo
+	sl.max_value = hi
+	sl.step = 0.01
+	sl.value = value
+	sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var val := Label.new()
+	val.text = "%.2f" % value
+	val.custom_minimum_size = Vector2(40, 0)
+	sl.value_changed.connect(func(v: float):
+		val.text = "%.2f" % v
+		cb.call(v)
+	)
+	row.add_child(sl)
+	row.add_child(val)
+	return row
