@@ -33,3 +33,34 @@
 - LOD：项目设置 `Rendering > Mesh LOD > Threshold Pixels`；导入模型时启用 generate LOD。
 - Godot 4 默认 GPU 蒙皮；骨骼预算按目标平台规划（移动端 ≤ 75 骨骼/角色）。
 - 头发 Alpha 裁剪优于透明混合（无排序问题）；覆盖层(湿感)才用 alpha blend。
+
+## 版本管理（git）
+
+本地仓库已初始化，首次提交为 `feat: HS2 捏人系统迁移到 Godot + 电影级人物渲染套件`。
+
+```bash
+git log --oneline          # 查看历史
+git status                 # 查看改动
+git diff                   # 查看未暂存改动
+```
+
+常用文件（提交范围）：
+| 路径 | 内容 |
+| --- | --- |
+| `hs2/` | 捏人数据层 / 骨架合并 / 角色装配 / 轨道相机 / 原版数据与资产 |
+| `shaders/` | 皮肤·眼睛·头发·布料 四个着色器 |
+| `tools/` | `fbx2glb.py`(FBX→glb)、`acceptance.gd`(机器验收)、`blender_oracle.py`(期望值) |
+| `*.tscn` | 四个演示场景 |
+
+`.gitignore` 排除的内容（如需恢复）：
+- `.godot/`、`.dsh-vision-router/` — 缓存/工具产物，删掉后会重建
+- `addons/TressFX-Godot/` — 349M，需自行 `git clone https://github.com/ismailivanov/TressFX-Godot.git` 并编译 GDExtension
+- `addons/HumanShaders/Models/{Monster,HumanHead/EmilyHeadScan}/` — 未使用的大模型，
+  可从 `https://github.com/matmadness/HumanShaders` 重新获取
+- `hs2/model/{face_n.TGA, cf_s_body_00_00_00-RGB24.png, Animation/}` — 未被引用的原始资产，
+  在原版 `HoneySelect/Assets/Cosmetic/` 下
+
+> 本仓库含约 600MB 二进制资产（HS2 模型/贴图、VRM、高模头）。
+> 若以后要推送到远端，建议先接 Git LFS：`git lfs track "*.glb" "*.png" "*.vrm" "*.TGA"`。
+> 提交身份为仓库局部配置（`myGirl Dev <dev@local>`），需要改成自己的可执行
+> `git config user.name "你的名字" && git config user.email "你的邮箱"`。
