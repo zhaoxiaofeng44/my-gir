@@ -292,10 +292,13 @@ func sub_recover(h: float) -> void:
 var _sleep_checks: int = 0
 var _asleep: bool = false
 var _sleep_frame: int = 0
+var _has_vel: bool = true   # vel[] 是否有效(子步求解期间为真; 非物理调用时置否)
 
 func self_collision() -> void:
 	if not enable_self_collision:
 		return
+	# 休眠判据必须与求解器自身的收敛门限一致(0.008)。用更严的值(0.001)会导致:
+	# 求解器已收敛(残差 0.004)却永远不满足休眠 -> 每帧重建 6 轮哈希(实测 self=31ms/帧, FPS 1)
 	if _asleep:
 		# 休眠中: 静止则定期抽检欠量(重力/求解仍可能慢慢压拢折皱), 有欠量即唤醒
 		if max_vel2 < 0.04:
@@ -303,11 +306,11 @@ func self_collision() -> void:
 			if _sleep_frame < 8:
 				return
 			_sleep_frame = 0
-			if _self_deficit() < 0.001:
+			if _self_deficit() < 0.008:
 				return
 		_asleep = false
 		_sleep_checks = 0
-	elif contact_deficit < 0.001 and max_vel2 < 0.04:
+	elif contact_deficit < 0.008 and max_vel2 < 0.04:
 		_sleep_checks += 1
 		if _sleep_checks >= 3:
 			_asleep = true
@@ -316,11 +319,15 @@ func self_collision() -> void:
 	else:
 		_sleep_checks = 0
 	var n := pos.size()
-	# 自碰用基准判据(折叠层由网格级/布间补偿共同兜住); 布间才做几何补偿,
-	# 避免把静置布料的自碰判据放大而触发每子步全量求解(实测 4 倍开销)
-	var min_d := cloth_thickness * 2.0
+	# 自碰同样需要几何补偿: 折叠层的一个顶点可以扎进对侧折层的三角形内部, 而顶点间距
+	# 仍 >= 2倍布厚。不补偿会出现"推开->落下"的永久抖振(实测 17 顶点悬空 3cm 抖动)。
+	# 采样半径 = S_visual + R。哈希格仍用该值, 邻域仍是 1 圈, 成本不变。
+	var min_d := cloth_thickness * 0.5 + tri_r
 	var min_d2 := min_d * min_d
 	var inv := 1.0 / min_d
+	# 注: 曾尝试用"平坦数组+计数排序"替代 Dictionary[Array], 但 GDScript 中手工归并/二分
+	# 远比 C++ 实现的 Dictionary 慢(实测 39.7ms vs 13.9ms), 已回退。
+	# 保留 Dictionary: 它是 GDScript 下最快的格索引。
 	for sweep in 6:
 		_hash.clear()
 		for i in n:
@@ -369,6 +376,17 @@ func self_collision() -> void:
 						var push := deficit / w
 						pos[i] += nrm * push * wa
 						pos[j] -= nrm * push * wb
+						# 法向速度阻尼: 折层在分离距离附近来回弹跳会永不静止(实测 11 顶点
+						# 长期 0.7m/s, 导致布料无法休眠、每帧全量自碰)。对接近中的法向分量做耗散。
+						if _has_vel:
+							var vrel := vel[i] - vel[j]
+							var vn := vrel.dot(nrm)
+							if vn < 0.0:
+								var dv := nrm * (vn * 0.5)
+								if wa > 0.0:
+									vel[i] -= dv * wa
+								if wb > 0.0:
+									vel[j] += dv * wb
 						p = pos[i]
 						pushed = true
 						_pushed_soft[i] = 1
@@ -534,13 +552,17 @@ func _vertex_push_out(pad: float, xfs: Array, xfis: Array) -> void:
 		if p != pos[i]:
 			_pushed[i] = 1
 		pos[i] = p
-	# 地面是最终硬不变量: 网格推动可能越过它 -> 末尾统一夹紧
+	# 地面是最终硬不变量: 网格推动可能越过它 -> 末尾统一夹紧。
+	# 同时清零"向下速度": 该夹紧发生在 sub_recover 之后(末子步), 若不处理速度,
+	# 下一子步顶点会带向下速度再次扎入 -> 永久抖振(实测 76 顶点 >0.3m/s, 最大 1.22m/s)
 	for i in pos.size():
 		if pinned[i] == 1:
 			continue
 		if pos[i].y < ground_y + pad:
 			pos[i] = Vector3(pos[i].x, ground_y + pad, pos[i].z)
 			_pushed[i] = 1
+			if vel[i].y < 0.0:
+				vel[i].y = 0.0
 
 # 网格级兜底: 顶点全在碰撞体外时, 三角形边/面仍可能横切碰撞体(球间深谷/地面),
 # 肉眼即"布料切入岩石缝隙"。对每条网格边中点与每格面心做碰撞检测, 欠量均摊到端点/顶点。
