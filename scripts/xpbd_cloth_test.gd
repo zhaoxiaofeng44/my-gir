@@ -7,6 +7,10 @@ extends Node3D
 @export var substeps: int = 4
 ## 布料求解后端: true = C++ GDExtension(快 ~17x), false = 纯 GDScript(参考实现)
 @export var use_native_backend: bool = true
+## 头发模拟(C++ 后端): 导向发束物理 + 插值渲染发丝
+@export var enable_hair: bool = true
+@export var hair_strands: int = 48
+@export var hair_render_strands: int = 240
 @export var gravity: Vector3 = Vector3(0, -9.8, 0)
 @export var wind_strength: float = 0.0
 @export var enable_object_collision: bool = true
@@ -86,7 +90,35 @@ func _ready() -> void:
 
 	_build_blob()
 	_rebuild_cloths()
+	_build_hair()
 	_build_ui()
+
+# ---------- 头发(C++ 后端): 导向束物理 + 插值渲染发丝 ----------
+var hair_native: XPBDHairNative = null
+var hair_mesh_inst: MeshInstance3D = null
+
+func _build_hair() -> void:
+	if not enable_hair or not ClassDB.class_exists("XPBDHairNative"):
+		return
+	hair_native = XPBDHairNative.new()
+	hair_native.name = "HairNative"
+	add_child(hair_native)
+	hair_native.set_strand_count(hair_strands)
+	hair_native.set_render_strands(hair_render_strands)
+	hair_native.set_segment_count(12)
+	hair_native.set_hair_length(0.55)
+	hair_native.set_head_radius(0.12)
+	hair_native.set_head_center(Vector3(0, 0.55, 0))
+	hair_native.build()
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	m.vertex_color_use_as_albedo = true
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.roughness = 0.55
+	hair_native.set_material(m)
+	hair_mesh_inst = MeshInstance3D.new()
+	hair_mesh_inst.name = "HairMesh"
+	add_child(hair_mesh_inst)
 
 # ---------- 碰撞体构建(视觉与 XPBDCollider 局部空间严格一致) ----------
 func _build_blob() -> void:
@@ -695,6 +727,11 @@ func _cross_walk(inv: float, min_d: float, check_d2: float, mode: int) -> float:
 # ---------- 渲染/HUD ----------
 func _process(delta: float) -> void:
 	_run_sim(minf(delta, 1.0 / 30.0))
+	# 头发(C++ 后端): 每帧步进 + 更新插值渲染网格
+	if hair_native:
+		hair_native.step(minf(delta, 1.0 / 30.0), 4)
+		hair_native.update_mesh()
+		hair_mesh_inst.mesh = hair_native.get_mesh()
 	if _frame_count % 15 == 0:
 		pen_count = 0
 		var worst_self := 0.0

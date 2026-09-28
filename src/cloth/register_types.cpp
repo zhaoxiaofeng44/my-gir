@@ -1,6 +1,7 @@
 #include "register_types.h"
 
 #include "xpbd_cloth_native.h"
+#include "xpbd_hair_native.h"
 
 #include <gdextension_interface.h>
 #include <godot_cpp/core/defs.hpp>
@@ -13,6 +14,7 @@ void initialize_cloth_native_module(ModuleInitializationLevel p_level) {
 		return;
 	}
 	GDREGISTER_CLASS(XPBDClothNative);
+	GDREGISTER_CLASS(XPBDHairNative);
 }
 
 void uninitialize_cloth_native_module(ModuleInitializationLevel p_level) {
