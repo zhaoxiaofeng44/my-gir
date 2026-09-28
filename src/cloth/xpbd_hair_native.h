@@ -19,6 +19,7 @@
 #include <godot_cpp/classes/node3d.hpp>
 #include <godot_cpp/classes/array_mesh.hpp>
 #include <godot_cpp/classes/material.hpp>
+#include <godot_cpp/classes/standard_material3d.hpp>
 #include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
 #include <godot_cpp/variant/packed_int32_array.hpp>
@@ -56,6 +57,7 @@ private:
 	real_t tip_width = 0.0015f;
 	Color root_color = Color(0.16f, 0.09f, 0.05f);
 	Color tip_color = Color(0.45f, 0.30f, 0.16f);
+	Color albedo = Color(0.45f, 0.35f, 0.25f);
 
 	// ---- 粒子状态(导向发束) ----
 	PackedVector3Array pos;   // strand_count * (segment_count+1)
@@ -86,10 +88,20 @@ private:
 
 	bool built = false;
 
+	// ---- 头部运动(甩头测试): 每子步记录头部位移, 粒子继承头速度 ----
+	Vector3 head_prev = Vector3();
+	bool head_moving = false;
+
+	// ---- 可移动障碍球(碰撞测试) ----
+	bool obstacle_on = false;
+	Vector3 obstacle_c = Vector3(0, -0.1f, 0);
+	real_t obstacle_r = 0.09f;
+
 	// ---- 内部 ----
 	void _build_strands();
 	void _build_render_strands();
 	void _collide_head(int i);
+	void _collide_obstacle(int i);
 	void _relax_chain(const PackedInt32Array &cand_a, const PackedInt32Array &cand_b, int passes);
 
 protected:
@@ -106,13 +118,13 @@ public:
 	PackedVector3Array get_positions() const { return pos; }
 	int get_guide_count() const { return strand_count; }
 	int get_render_count() const { return render_strands; }
-	int get_segment_count() const { return segment_count; }
 	real_t get_tri_r() const { return 0.0f; }
 	bool get_asleep() const { return false; }
 
 	void set_strand_count(int v) { strand_count = v; }
 	int get_strand_count() const { return strand_count; }
 	void set_segment_count(int v) { segment_count = v; }
+	int get_segment_count() const { return segment_count; }
 	void set_hair_length(real_t v) { hair_length = v; }
 	real_t get_hair_length() const { return hair_length; }
 	void set_head_radius(real_t v) { head_radius = v; }
@@ -133,8 +145,17 @@ public:
 	Color get_root_color() const { return root_color; }
 	void set_tip_color(const Color &v) { tip_color = v; }
 	Color get_tip_color() const { return tip_color; }
+	void set_albedo(const Color &v) { albedo = v; }
+	Color get_albedo() const { return albedo; }
 	void set_material(const Ref<Material> &m) { material = m; }
 	Ref<Material> get_material() const { return material; }
+	Ref<ArrayMesh> get_mesh() const { return mesh; }
+
+	void set_obstacle(bool on, const Vector3 &c, real_t r) { obstacle_on = on; obstacle_c = c; obstacle_r = r; }
+	bool get_obstacle_on() const { return obstacle_on; }
+	Vector3 get_obstacle_c() const { return obstacle_c; }
+	real_t get_obstacle_r() const { return obstacle_r; }
+	void set_head_moving(bool v) { head_moving = v; }
 
 	// 布间/物体接口(与布料一致的语义, 供场景统一调度)
 	void reset_wind() {}

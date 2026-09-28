@@ -26,7 +26,6 @@ void XPBDHairNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_strand_count", "v"), &XPBDHairNative::set_strand_count);
 	ClassDB::bind_method(D_METHOD("get_strand_count"), &XPBDHairNative::get_strand_count);
 	ClassDB::bind_method(D_METHOD("set_segment_count", "v"), &XPBDHairNative::set_segment_count);
-	ClassDB::bind_method(D_METHOD("get_segment_count"), &XPBDHairNative::get_segment_count);
 	ClassDB::bind_method(D_METHOD("set_hair_length", "v"), &XPBDHairNative::set_hair_length);
 	ClassDB::bind_method(D_METHOD("get_hair_length"), &XPBDHairNative::get_hair_length);
 	ClassDB::bind_method(D_METHOD("set_head_radius", "v"), &XPBDHairNative::set_head_radius);
@@ -47,8 +46,16 @@ void XPBDHairNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_root_color"), &XPBDHairNative::get_root_color);
 	ClassDB::bind_method(D_METHOD("set_tip_color", "v"), &XPBDHairNative::set_tip_color);
 	ClassDB::bind_method(D_METHOD("get_tip_color"), &XPBDHairNative::get_tip_color);
+	ClassDB::bind_method(D_METHOD("set_albedo", "c"), &XPBDHairNative::set_albedo);
+	ClassDB::bind_method(D_METHOD("get_albedo"), &XPBDHairNative::get_albedo);
 	ClassDB::bind_method(D_METHOD("set_material", "m"), &XPBDHairNative::set_material);
 	ClassDB::bind_method(D_METHOD("get_material"), &XPBDHairNative::get_material);
+	ClassDB::bind_method(D_METHOD("set_obstacle", "on", "c", "r"), &XPBDHairNative::set_obstacle);
+	ClassDB::bind_method(D_METHOD("get_obstacle_on"), &XPBDHairNative::get_obstacle_on);
+	ClassDB::bind_method(D_METHOD("get_obstacle_c"), &XPBDHairNative::get_obstacle_c);
+	ClassDB::bind_method(D_METHOD("get_obstacle_r"), &XPBDHairNative::get_obstacle_r);
+	ClassDB::bind_method(D_METHOD("set_head_moving", "v"), &XPBDHairNative::set_head_moving);
+	ClassDB::bind_method(D_METHOD("get_mesh"), &XPBDHairNative::get_mesh);
 }
 
 // ============================================================================
@@ -137,6 +144,17 @@ void XPBDHairNative::_build_strands() {
 
 void XPBDHairNative::build() {
 	_build_strands();
+	// 材质: 顶点色渐变(发根/发梢), 双面
+	{
+		Ref<StandardMaterial3D> m;
+		m.instantiate();
+		m->set_shading_mode(BaseMaterial3D::SHADING_MODE_PER_PIXEL);
+		m->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
+		m->set_cull_mode(BaseMaterial3D::CULL_DISABLED);
+		m->set_roughness(0.55f);
+		m->set_albedo(albedo);
+		material = m;
+	}
 	update_mesh();
 }
 
@@ -150,17 +168,21 @@ void XPBDHairNative::step(real_t delta, int substeps) {
 	const int n = pos.size();
 	const int sub = MAX(substeps, 1);
 	const real_t h = delta / (real_t)sub;
+	head_prev = head_center;
 
 	for (int s = 0; s < sub; s++) {
-		// --- 积分 ---
+		// --- 积分(含头部运动: 甩头时粒子继承头速度) ---
+		Vector3 head_vel;
+		if (head_moving) {
+			head_vel = (head_center - head_prev) / h;
+		}
 		for (int i = 0; i < n; i++) {
-			const int strand = i / (segment_count + 1);
 			const int k = i % (segment_count + 1);
 			if (k == 0) {
 				continue; // 发根钉在头皮上
 			}
 			prev.set(i, pos[i]);
-			Vector3 v = vel[i] + Vector3(0, -9.8f * gravity_scale, 0) * h;
+			Vector3 v = vel[i] + Vector3(0, -9.8f * gravity_scale, 0) * h + head_vel;
 			v *= (1.0f - damping);
 			vel.set(i, v);
 			pos.set(i, pos[i] + v * h);
@@ -199,9 +221,12 @@ void XPBDHairNative::step(real_t delta, int substeps) {
 			}
 		}
 
-		// --- 头部碰撞: 把粒子推出头部球外 ---
+		// --- 头部碰撞 + 可移动障碍球 ---
 		for (int i = 0; i < n; i++) {
 			_collide_head(i);
+			if (obstacle_on) {
+				_collide_obstacle(i);
+			}
 		}
 
 		// --- 速度恢复: 由位置差反推(含阻尼) ---
@@ -214,6 +239,25 @@ void XPBDHairNative::step(real_t delta, int substeps) {
 			}
 			vel.set(i, (pos[i] - prev[i]) * inv_h);
 		}
+	}
+}
+
+// 可移动障碍球: 推出 + 摩擦
+void XPBDHairNative::_collide_obstacle(int i) {
+	const Vector3 d = pos[i] - obstacle_c;
+	const real_t rr = obstacle_r + collide_radius;
+	const real_t d2 = d.length_squared();
+	if (d2 >= rr * rr) {
+		return;
+	}
+	const real_t ln = std::sqrt(MAX(d2, 1e-12f));
+	const Vector3 nrm = ln > 1e-9f ? d / ln : Vector3(0, 1, 0);
+	pos.set(i, obstacle_c + nrm * rr);
+	Vector3 v = vel[i];
+	const real_t vn = v.dot(nrm);
+	if (vn < 0.0f) {
+		v -= nrm * vn * (1.0f - friction);
+		vel.set(i, v);
 	}
 }
 

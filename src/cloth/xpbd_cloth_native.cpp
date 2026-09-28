@@ -159,6 +159,8 @@ void XPBDClothNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_mesh"), &XPBDClothNative::get_mesh);
 	ClassDB::bind_method(D_METHOD("set_material", "m"), &XPBDClothNative::set_material);
 	ClassDB::bind_method(D_METHOD("get_material"), &XPBDClothNative::get_material);
+	ClassDB::bind_method(D_METHOD("set_albedo", "c"), &XPBDClothNative::set_albedo);
+	ClassDB::bind_method(D_METHOD("get_albedo"), &XPBDClothNative::get_albedo);
 
 	// 属性(便于 GDScript 侧直接读写)。类型必须与 getter/setter 一致, 否则 create_method_bind 编译失败。
 #define BIND_P(name, getter, setter, vtype) \
@@ -188,6 +190,7 @@ void XPBDClothNative::_bind_methods() {
 	BIND_P(grab_target, get_grab_target, set_grab_target, Variant::VECTOR3)
 	BIND_P(spawn_origin, get_spawn_origin, set_spawn_origin, Variant::VECTOR3)
 	BIND_P(cloth_size, get_cloth_size, set_cloth_size, Variant::VECTOR2)
+	BIND_P(albedo, get_albedo, set_albedo, Variant::COLOR)
 #undef BIND_P
 }
 
@@ -277,13 +280,19 @@ void XPBDClothNative::build() {
 	// 之前遗漏导致 g_cloths 为空 -> 布间碰撞从未生效(层间距仅 4mm)
 	register_cloth(this);
 
-	// 默认材质(与 GDScript 一致: 双面 + 粗糙)
+	// 默认材质(与 GDScript 一致: 双面 + 粗糙), 颜色用 albedo
 	if (material.is_null()) {
 		Ref<StandardMaterial3D> m;
 		m.instantiate();
 		m->set_cull_mode(BaseMaterial3D::CULL_DISABLED);
 		m->set_roughness(0.7f);
+		m->set_albedo(albedo);
 		material = m;
+	} else {
+		Ref<StandardMaterial3D> sm = material;
+		if (sm.is_valid()) {
+			sm->set_albedo(albedo);
+		}
 	}
 }
 

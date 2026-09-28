@@ -60,6 +60,7 @@ private:
 	PackedInt32Array vtx_tri_ids;
 	PackedInt32Array tri_verts;
 	real_t tri_r = 0.0; // 三角形外接圆半径上界
+	Color albedo = Color(0.85f, 0.3f, 0.35f); // 布料颜色(材质)
 
 	// ---- 物理参数(与 GDScript 同名) ----
 	int iterations = 1;
@@ -117,6 +118,8 @@ private:
 	// ---- 渲染 ----
 	Ref<ArrayMesh> mesh;
 	Ref<Material> material;
+	void set_albedo(const Color &v) { albedo = v; }
+	Color get_albedo() const { return albedo; }
 
 	// ---- 内部方法 ----
 	void _add_constraint(int ia, int ib, int ctype);
