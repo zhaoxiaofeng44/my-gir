@@ -10,6 +10,7 @@ func _init() -> void:
 	get_root().add_child(scene)
 	await process_frame
 	scene.set_process(false)
+	scene.use_native_backend = true   # 回归覆盖 C++ 后端
 	for m in 3:
 		_setup(m)
 		_run(300)

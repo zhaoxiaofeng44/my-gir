@@ -119,7 +119,7 @@ func _hash_build(cloths: Array, cell: float) -> Array:
 	var inv := 1.0 / cell
 	var gid := 0
 	for ci in cloths.size():
-		var cl: XPBDCloth = cloths[ci]
+		var cl = cloths[ci]
 		for i in cl.pos.size():
 			var key: int = _hash_key(cl.pos[i], inv)
 			if hh.has(key):
@@ -151,7 +151,7 @@ func _worst_inter_exact() -> float:
 	for g in total:
 		var ci: int = owner_of[g]
 		var i: int = local_of[g]
-		var cl: XPBDCloth = cloths[ci]
+		var cl = cloths[ci]
 		if _is_forced(cl, i):
 			continue
 		var p: Vector3 = cl.pos[i]
@@ -177,7 +177,7 @@ func _worst_inter_exact() -> float:
 	return worst
 
 # 自碰撞穿透: 单布顶点对(排除网格邻接 dr<=2且dc<=2 与抓取点)深入 min_d*0.5 的最大深度
-func _worst_self(cl: XPBDCloth) -> float:
+func _worst_self(cl) -> float:
 	var min_d: float = cl.cloth_thickness * 2.0
 	var inv := 1.0 / min_d
 	var hh := {}
@@ -196,8 +196,8 @@ func _worst_self(cl: XPBDCloth) -> float:
 		var cx := int(floor(p.x * inv)) + 512
 		var cy := int(floor(p.y * inv)) + 512
 		var cz := int(floor(p.z * inv)) + 512
-		var ri := i / cols
-		var ci2 := i % cols
+		var ri: int = i / cols
+		var ci2: int = i % cols
 		for off in _OFFS:
 			var key: int = (cx + off.x) << 20 | (cy + off.y) << 10 | (cz + off.z)
 			if not hh.has(key):
@@ -250,7 +250,7 @@ func _t_throw(m: int) -> void:
 	_run(50)
 	var worst := 0.0
 	for speed in [45.0, 120.0]:
-		var cl: XPBDCloth = scene.cloths[0]
+		var cl = scene.cloths[0]
 		for i in cl.pos.size():
 			var dir: Vector3 = (Vector3(0, 0.2, 0) - cl.pos[i]).normalized()
 			cl.vel[i] = dir * speed
@@ -321,7 +321,7 @@ func _t_spin() -> void:
 func _t_grab_yank_obj() -> void:
 	_setup(0, 2)
 	_run(120)
-	var cl: XPBDCloth = scene.cloths[0]
+	var cl = scene.cloths[0]
 	cl.grab_stiffness = 1.0
 	cl.grabbing = true
 	cl.grab_id = (cl.rows / 2) * cl.cols + cl.cols / 2
@@ -340,7 +340,7 @@ func _t_grab_yank_obj() -> void:
 func _t_ground_slam() -> void:
 	_setup(0, 2)
 	_run(40)
-	var cl: XPBDCloth = scene.cloths[0]
+	var cl = scene.cloths[0]
 	for i in cl.pos.size():
 		cl.vel[i] = Vector3(0, -30, 0)
 	var worst := 0.0
@@ -361,7 +361,7 @@ func _t_fold() -> void:
 	scene.blob_center = Vector3(0, -1.5, 0)
 	scene.blob_root.position = scene.blob_center
 	_run(120)
-	var cl: XPBDCloth = scene.cloths[0]
+	var cl = scene.cloths[0]
 	var center := Vector3(0, cl.ground_y + 0.15, 0)
 	var worst := 0.0
 	for s in 50:
@@ -388,7 +388,7 @@ func _t_crumple() -> void:
 	scene.blob_center = Vector3(0, -1.5, 0)
 	scene.blob_root.position = scene.blob_center
 	_run(100)
-	var cl: XPBDCloth = scene.cloths[0]
+	var cl = scene.cloths[0]
 	var center := Vector3(0, cl.ground_y + 0.35, 0)
 	var worst := 0.0
 	for s in 60:
@@ -425,7 +425,7 @@ func _t_pile() -> void:
 func _t_throw_curtain() -> void:
 	_setup(0, 2)
 	_run(150)
-	var cl: XPBDCloth = scene.cloths[0]
+	var cl = scene.cloths[0]
 	var target := Vector3(-1.35, 1.2, -0.6)
 	for i in cl.pos.size():
 		var dir: Vector3 = target - cl.pos[i]
@@ -474,7 +474,7 @@ func _t_drag_squeeze() -> void:
 func _t_grab_yank_inter() -> void:
 	_setup(0, 2)
 	_run(150)
-	var cl: XPBDCloth = scene.cloths[0]
+	var cl = scene.cloths[0]
 	cl.grab_stiffness = 1.0
 	cl.grabbing = true
 	cl.grab_id = (cl.rows / 2) * cl.cols + cl.cols / 2
@@ -503,7 +503,7 @@ func _t_extreme_low() -> void:
 	scene.friction = 0.0
 	scene._sync_params()
 	_run(250)
-	var cl: XPBDCloth = scene.cloths[0]
+	var cl = scene.cloths[0]
 	for i in cl.pos.size():
 		var dir: Vector3 = (Vector3(0, 0.2, 0) - cl.pos[i]).normalized()
 		cl.vel[i] = dir * 45.0
@@ -578,7 +578,7 @@ func _t_cover5() -> void:
 	_setup(0, 5)
 	var offs: Array = [Vector3(0, 1.8, 0), Vector3(0.15, 2.5, -0.1), Vector3(-0.12, 3.1, 0.12), Vector3(0.1, 3.7, -0.05), Vector3(-0.05, 4.3, 0.1)]
 	for k in 5:
-		var cl: XPBDCloth = scene.cloths[k]
+		var cl = scene.cloths[k]
 		cl.vertical = false
 		cl.yaw = 0.0
 		cl.cols = 20

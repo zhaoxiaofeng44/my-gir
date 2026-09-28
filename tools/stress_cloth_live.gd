@@ -14,6 +14,7 @@ func _init() -> void:
 	get_root().add_child(scene)
 	await process_frame
 	scene.set_process(false)
+	scene.use_native_backend = true   # 回归覆盖 C++ 后端
 
 	_t_live_stress(0)
 	_t_live_stress(1)
@@ -86,15 +87,15 @@ func _bounds_ok() -> bool:
 	return true
 
 # 自碰: 单布全对 O(n^2) — 比哈希审计更严(任何位置的对都被检查)
-func _worst_self_strict(cl: XPBDCloth) -> float:
+func _worst_self_strict(cl) -> float:
 	var min_d: float = cl.cloth_thickness * 2.0
 	var worst := 0.0
-	var n := cl.pos.size()
-	var cols := cl.cols
+	var n: int = cl.pos.size()
+	var cols: int = cl.cols
 	for i in n:
 		if cl.grabbing and i == cl.grab_id:
 			continue
-		var p := cl.pos[i]
+		var p: Vector3 = cl.pos[i]
 		var ri := i / cols
 		var cix := i % cols
 		for j in range(i + 1, n):
@@ -102,7 +103,7 @@ func _worst_self_strict(cl: XPBDCloth) -> float:
 			var dc: int = absi(j % cols - cix)
 			if dr <= 2 and dc <= 2:
 				continue
-			var d := p.distance_to(cl.pos[j])
+			var d: float = p.distance_to(cl.pos[j])
 			if d < min_d * 0.5:
 				var pen := min_d * 0.5 - d
 				if pen > worst:
@@ -115,16 +116,16 @@ func _worst_inter_strict() -> float:
 		return 0.0
 	var min_d: float = scene.cloths[0].cloth_thickness * 2.0
 	var worst := 0.0
-	var a: XPBDCloth = scene.cloths[0]
-	var b: XPBDCloth = scene.cloths[1]
+	var a = scene.cloths[0]
+	var b = scene.cloths[1]
 	for i in a.pos.size():
 		if a.grabbing and i == a.grab_id:
 			continue
-		var p := a.pos[i]
+		var p: Vector3 = a.pos[i]
 		for j in b.pos.size():
 			if b.grabbing and j == b.grab_id:
 				continue
-			var d := p.distance_to(b.pos[j])
+			var d: float = p.distance_to(b.pos[j])
 			if d < min_d * 0.5:
 				var pen := min_d * 0.5 - d
 				if pen > worst:
@@ -173,7 +174,7 @@ func _t_live_stress(m: int) -> void:
 func _t_live_stress_grab() -> void:
 	_setup(0, 2)
 	_run(150)
-	var cl: XPBDCloth = scene.cloths[0]
+	var cl = scene.cloths[0]
 	cl.grab_stiffness = 1.0
 	cl.grabbing = true
 	cl.grab_id = (cl.rows / 2) * cl.cols + cl.cols / 2

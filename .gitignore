@@ -15,3 +15,10 @@ hs2/model/cf_s_body_00_00_00-RGB24.png
 
 # ── 系统 ──────────────────────────────────────
 .DS_Store
+
+# ── C++ 扩展构建产物(可用 SConstruct 重建) ──
+/buildenv/
+godot-cpp/
+addons/cloth_native/bin/
+*.os
+*.dblite

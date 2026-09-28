@@ -5,6 +5,8 @@ extends Node3D
 ## 防穿透: 碰撞体局部空间解析TOI(球/胶囊/方箱) + 切向滑移摩擦 + 最终最小穿透推出兜底(见 XPBDCloth/XPBDCollider)
 
 @export var substeps: int = 4
+## 布料求解后端: true = C++ GDExtension(快 ~17x), false = 纯 GDScript(参考实现)
+@export var use_native_backend: bool = true
 @export var gravity: Vector3 = Vector3(0, -9.8, 0)
 @export var wind_strength: float = 0.0
 @export var enable_object_collision: bool = true
@@ -43,7 +45,7 @@ var drag_offset := Vector3.ZERO
 var drag_depth: float = 0.0
 var drag_pos := Vector3.ZERO      # 拖拽目标位置(限速逼近)
 var drag_speed := 2.5             # 碰撞体拖拽限速 m/s: 保证每帧位移 < 布厚量级 => TOI+推出稳定
-var grabbed_cloth: XPBDCloth = null
+var grabbed_cloth: Node3D = null
 
 var _frame_count: int = 0
 var pen_count: int = 0          # 物体穿透审计(应恒为0)
@@ -152,12 +154,21 @@ func _rebuild_cloths() -> void:
 	if cloth_count >= 5:
 		add_cloth(_make_drape(Vector3(-0.12, 3.4, 0.15), Vector2(1.8, 1.8), Color(0.62, 0.42, 0.85), "Drape5"))
 	_sync_params()
+	_refresh_native_impl()
 
-func _make_sheet() -> XPBDCloth:
+func _make_sheet() -> Node3D:
 	return _make_drape(Vector3(0, 1.8, 0), Vector2(2.0, 2.0), Color(0.85, 0.3, 0.35), "Sheet", 24)
 
-func _make_drape(origin: Vector3, size: Vector2, col: Color, cname: String, res: int = 20) -> XPBDCloth:
-	var cl := XPBDCloth.new()
+const XPBDClothNativeAdapterScript := preload("res://scripts/xpbd_cloth_native_adapter.gd")
+
+# 布料工厂: 按 use_native_backend 选择实现(两者接口一致)
+func _new_cloth() -> Node3D:
+	if use_native_backend and ClassDB.class_exists("XPBDClothNative"):
+		return XPBDClothNativeAdapterScript.new()
+	return XPBDCloth.new()
+
+func _make_drape(origin: Vector3, size: Vector2, col: Color, cname: String, res: int = 20) -> Node3D:
+	var cl := _new_cloth()
 	cl.name = cname
 	cl.cols = res
 	cl.rows = res
@@ -168,8 +179,8 @@ func _make_drape(origin: Vector3, size: Vector2, col: Color, cname: String, res:
 	cl.build()
 	return cl
 
-func _make_curtain(origin: Vector3, yaw: float, col: Color) -> XPBDCloth:
-	var cl := XPBDCloth.new()
+func _make_curtain(origin: Vector3, yaw: float, col: Color) -> Node3D:
+	var cl := _new_cloth()
 	cl.name = "Curtain"
 	cl.cols = 16
 	cl.rows = 16
@@ -182,7 +193,7 @@ func _make_curtain(origin: Vector3, yaw: float, col: Color) -> XPBDCloth:
 	cl.build()
 	return cl
 
-func add_cloth(cl: XPBDCloth) -> void:
+func add_cloth(cl: Node3D) -> void:
 	cl.colliders = [collider]
 	cloths.append(cl)
 
@@ -262,7 +273,7 @@ func _run_sim(delta: float) -> void:
 			# 布间在"快"(驱动/高速/受压)时也必须每子步: 6m/s 砸穿会剧烈压紧布层,
 			# 只靠末子步分离会把整叠布挤进碰撞体(实测物体穿透 0.0245m 回归)
 			if fast:
-				_cross_contact(true)
+				_cross_contact_any(true)
 		for cl in cloths:
 			if not contacts:
 				cl.begin_contacts()
@@ -274,13 +285,32 @@ func _run_sim(delta: float) -> void:
 			for cl in cloths:
 				cl.final_push_out()
 			if not fast:
-				_cross_contact(true)
+				_cross_contact_any(true)
 			for cl in cloths:
 				cl.self_collision()
 			for cl in cloths:
 				cl.final_push_out()
 		for cl in cloths:
 			cl.sub_recover(h)
+
+# 布间调度: C++ 后端时走原生(内部维护全局注册表), 否则回落 GDScript 实现
+func _cross_contact_any(push: bool) -> void:
+	if use_native_backend and _native_impl != null:
+		_native_impl.cross_contact_all(push)
+		return
+	_cross_contact(push)
+
+# 返回首个原生布料实例(用于调用其跨布静态接口), 无则 null
+var _native_impl = null
+
+func _refresh_native_impl() -> void:
+	_native_impl = null
+	if not use_native_backend:
+		return
+	for cl in cloths:
+		if cl.get("native") != null:
+			_native_impl = cl.native
+			return
 
 # ---------- 布间面级碰撞(多层叠放防穿模) ----------
 # 顶点式碰撞的盲区: 一层的顶点全在另一层外侧, 但它的表面(三角形)已从另一层中间穿过。
@@ -302,7 +332,7 @@ func _cross_face_contact() -> void:
 	pass
 
 # 把 A 的顶点 i 从 B 中顶点 k 的关联三角形表面推开(反作用分摊给三角形三顶点)
-func _face_push_for(A: XPBDCloth, ai: int, i: int, B: XPBDCloth, bi: int, k: int, half: float, smin2: float) -> void:
+func _face_push_for(A, ai: int, i: int, B, bi: int, k: int, half: float, smin2: float) -> void:
 	var p: Vector3 = A.pos[i]
 	var wai := 0.0 if (A.pinned[i] == 1 or (A.grabbing and i == A.grab_id)) else 1.0
 	for t in range(B.vtx_tri_ofs[k], B.vtx_tri_ofs[k + 1]):
@@ -395,7 +425,7 @@ func face_deficit() -> float:
 	var smin2 := (half * 1.5) * (half * 1.5)
 	for g in _owner_of.size():
 		var ci: int = _owner_of[g]
-		var A: XPBDCloth = cloths[ci]
+		var A = cloths[ci]
 		var i: int = _local_of[g]
 		var p: Vector3 = A.pos[i]
 		var cx := int(floor(p.x * inv)) + 512
@@ -410,7 +440,7 @@ func face_deficit() -> float:
 				var cj: int = _owner_of[j]
 				if cj == ci:
 					continue
-				var B: XPBDCloth = cloths[cj]
+				var B = cloths[cj]
 				var k: int = _local_of[j]
 				for t in range(B.vtx_tri_ofs[k], B.vtx_tri_ofs[k + 1]):
 					var tid: int = B.vtx_tri_ids[t]
@@ -440,7 +470,7 @@ func face_cross_count() -> Array:
 	# 收集候选顶点(去重), 再逐个测其关联三角形
 	for g in _owner_of.size():
 		var ci: int = _owner_of[g]
-		var A: XPBDCloth = cloths[ci]
+		var A = cloths[ci]
 		var i: int = _local_of[g]
 		var p: Vector3 = A.pos[i]
 		var cx := int(floor(p.x * inv)) + 512
@@ -454,7 +484,7 @@ func face_cross_count() -> Array:
 				var cj: int = _owner_of[jj]
 				if cj == ci:
 					continue
-				var B: XPBDCloth = cloths[cj]
+				var B = cloths[cj]
 				var k: int = _local_of[jj]
 				if p.distance_squared_to(B.pos[k]) > search2:
 					continue
@@ -466,8 +496,8 @@ func face_cross_count() -> Array:
 					var cp := _closest_on_tri(p, B.pos[i0], B.pos[i1], B.pos[i2])
 					if cp.distance_to(p) > half:
 						continue
-					var nrm := (B.pos[i1] - B.pos[i0]).cross(B.pos[i2] - B.pos[i0])
-					var nl := nrm.length()
+					var nrm: Vector3 = (B.pos[i1] - B.pos[i0]).cross(B.pos[i2] - B.pos[i0])
+					var nl: float = nrm.length()
 					if nl < 1e-9:
 						continue
 					nrm /= nl
@@ -507,9 +537,9 @@ func _cross_contact(push: bool) -> int:
 				return _cross_contact_real(push)
 	return 0
 
-func _cloth_aabb(cl: XPBDCloth) -> AABB:
-	var lo := cl.pos[0]
-	var hi := cl.pos[0]
+func _cloth_aabb(cl) -> AABB:
+	var lo: Vector3 = cl.pos[0]
+	var hi: Vector3 = cl.pos[0]
 	for i in cl.pos.size():
 		lo = lo.min(cl.pos[i])
 		hi = hi.max(cl.pos[i])
@@ -576,7 +606,7 @@ func _cross_build(inv: float) -> void:
 	var local_tmp := PackedInt32Array()
 	var gid := 0
 	for ci in cloths.size():
-		var cl: XPBDCloth = cloths[ci]
+		var cl = cloths[ci]
 		for i in cl.pos.size():
 			var p: Vector3 = cl.pos[i]
 			var relevant := false
@@ -608,7 +638,7 @@ func _cross_walk(inv: float, min_d: float, check_d2: float, mode: int) -> float:
 	var offs: Array = XPBDCloth._OFFS
 	for g in _owner_of.size():
 		var ci: int = _owner_of[g]
-		var cl: XPBDCloth = cloths[ci]
+		var cl = cloths[ci]
 		var i: int = _local_of[g]
 		var p: Vector3 = cl.pos[i]
 		var cx := int(floor(p.x * inv)) + 512
@@ -626,7 +656,7 @@ func _cross_walk(inv: float, min_d: float, check_d2: float, mode: int) -> float:
 				var cj: int = _owner_of[j]
 				if cj == ci:
 					continue   # 同布料交给 self_collision
-				var cl2: XPBDCloth = cloths[cj]
+				var cl2 = cloths[cj]
 				var k: int = _local_of[j]
 				var d: Vector3 = p - cl2.pos[k]
 				var d2 := d.length_squared()
@@ -751,7 +781,7 @@ func _press_left(screen_pos: Vector2) -> void:
 		drag_pos = blob_center
 		return
 	# 否则: 在所有布料中拾取射线上最近顶点
-	var best_cl: XPBDCloth = null
+	var best_cl = null
 	var best_i := -1
 	var best_along := 1e9
 	for cl in cloths:

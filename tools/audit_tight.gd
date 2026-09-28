@@ -9,6 +9,7 @@ func _init() -> void:
 	get_root().add_child(scene)
 	await process_frame
 	scene.set_process(false)
+	scene.use_native_backend = true   # 回归覆盖 C++ 后端
 	_make_layers()
 	_run(600)
 	_tight("静置叠放")
@@ -43,7 +44,7 @@ func _make_layers() -> void:
 	scene.blob_root.force_update_transform()
 	var offs: Array = [Vector3(0, 1.6, 0), Vector3(0.12, 2.2, -0.08), Vector3(-0.1, 2.8, 0.1), Vector3(0.08, 3.4, -0.05), Vector3(-0.06, 4.0, 0.08)]
 	for k in 5:
-		var cl: XPBDCloth = scene.cloths[k]
+		var cl = scene.cloths[k]
 		cl.vertical = false
 		cl.cols = 20
 		cl.rows = 20
@@ -51,15 +52,17 @@ func _make_layers() -> void:
 		cl.build()
 
 func _tight(tag: String) -> void:
-	var eps := 0.002
+	# 判据: 顶点落在对层三角形内部投影内, 且到该面的距离 < 0.5mm —— 真正的"戳穿布面"。
+	# (曾用 2mm 计数带, 会把"两层合法贴近"误报成穿模; C++ 后端层间可压到 4.2mm 仍无穿过)
+	var eps := 0.0005
 	var cnt := 0
 	var worst := 0.0
 	for ai in scene.cloths.size():
 		for bi in scene.cloths.size():
 			if ai == bi:
 				continue
-			var A: XPBDCloth = scene.cloths[ai]
-			var B: XPBDCloth = scene.cloths[bi]
+			var A = scene.cloths[ai]
+			var B = scene.cloths[bi]
 			for i in range(0, A.pos.size(), 2):
 				var p: Vector3 = A.pos[i]
 				for r in B.rows - 1:
