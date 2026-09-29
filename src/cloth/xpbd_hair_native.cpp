@@ -52,6 +52,11 @@ void XPBDHairNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_material"), &XPBDHairNative::get_material);
 	ClassDB::bind_method(D_METHOD("set_obstacle", "on", "c", "r"), &XPBDHairNative::set_obstacle);
 	ClassDB::bind_method(D_METHOD("set_body_collision", "on", "a", "b", "r"), &XPBDHairNative::set_body_collision);
+	ClassDB::bind_method(D_METHOD("translate_follow", "delta"), &XPBDHairNative::translate_follow);
+	ClassDB::bind_method(D_METHOD("get_body_on"), &XPBDHairNative::get_body_on);
+	ClassDB::bind_method(D_METHOD("get_body_a"), &XPBDHairNative::get_body_a);
+	ClassDB::bind_method(D_METHOD("get_body_b"), &XPBDHairNative::get_body_b);
+	ClassDB::bind_method(D_METHOD("get_body_r"), &XPBDHairNative::get_body_r);
 	ClassDB::bind_method(D_METHOD("get_obstacle_on"), &XPBDHairNative::get_obstacle_on);
 	ClassDB::bind_method(D_METHOD("get_obstacle_c"), &XPBDHairNative::get_obstacle_c);
 	ClassDB::bind_method(D_METHOD("get_obstacle_r"), &XPBDHairNative::get_obstacle_r);
@@ -145,6 +150,55 @@ void XPBDHairNative::_build_strands() {
 	built = true;
 }
 
+void XPBDHairNative::set_model_transform(const Vector3 &origin, real_t yaw_deg) {
+	// record model linear velocity (drag inertia)
+	model_vel = (origin - model_origin) / 0.016f;
+	model_prev_origin = model_origin;
+	model_origin = origin;
+	model_yaw = yaw_deg * 3.14159265359f / 180.0f;
+	const Basis rot = Basis::from_euler(Vector3(0, model_yaw, 0));
+	head_center = origin + rot.xform(head_center);
+	body_a = origin + rot.xform(body_a);
+	body_b = origin + rot.xform(body_b);
+	obstacle_c = origin + rot.xform(obstacle_c);
+	for (int i = 0; i < roots.size(); i++) {
+		Vector3 local = roots[i] - model_prev_origin;
+		Vector3 rotated = rot.xform(local);
+		roots.set(i, origin + rotated);
+	}
+	Vector3 delta_p = origin - model_prev_origin;
+	if (delta_p.length_squared() > 1e-12f) {
+		for (int i = 0; i < pos.size(); i++) {
+			if ((i % (segment_count + 1)) == 0) {
+				continue;
+			}
+			pos.set(i, pos[i] + delta_p);
+		}
+	}
+}
+
+void XPBDHairNative::translate_follow(const Vector3 &delta) {
+	if (delta.length_squared() < 1e-12f) {
+		return;
+	}
+	for (int i = 0; i < roots.size(); i++) {
+		roots.set(i, roots[i] + delta);
+	}
+	for (int i = 0; i < pos.size(); i++) {
+		pos.set(i, pos[i] + delta);
+	}
+	head_center += delta;
+	body_a += delta;
+	body_b += delta;
+	const Vector3 inherit = -delta * 8.0f;
+	for (int i = 0; i < pos.size(); i++) {
+		const int k = i % (segment_count + 1);
+		if (k != 0) {
+			vel.set(i, vel[i] + inherit);
+		}
+	}
+}
+
 void XPBDHairNative::build() {
 	_build_strands();
 	// 材质: 顶点色渐变(发根/发梢), 双面
@@ -172,6 +226,7 @@ void XPBDHairNative::step(real_t delta, int substeps) {
 	const int sub = MAX(substeps, 1);
 	const real_t h = delta / (real_t)sub;
 	head_prev = head_center;
+	model_vel *= 0.5f;
 
 	for (int s = 0; s < sub; s++) {
 		// --- 积分(含头部运动: 甩头时粒子继承头速度) ---
@@ -185,7 +240,7 @@ void XPBDHairNative::step(real_t delta, int substeps) {
 				continue; // 发根钉在头皮上
 			}
 			prev.set(i, pos[i]);
-			Vector3 v = vel[i] + Vector3(0, -9.8f * gravity_scale, 0) * h + head_vel + wind;
+			Vector3 v = vel[i] + Vector3(0, -9.8f * gravity_scale, 0) * h + head_vel + wind + model_vel;
 			v *= (1.0f - damping);
 			vel.set(i, v);
 			pos.set(i, pos[i] + v * h);
@@ -222,9 +277,15 @@ void XPBDHairNative::step(real_t delta, int substeps) {
 			for (int s2 = 0; s2 < (int)roots.size(); s2++) {
 				pos.set(s2 * (segment_count + 1), roots[s2]);
 			}
-			// 松弛会把粒子推回头部内(约束不感知碰撞) -> 每轮松弛后再做一次头部碰撞
+			// 松弛会把粒子推回碰撞体内(约束不感知碰撞) -> 每轮松弛后再做一次全碰撞
 			for (int i = 0; i < n; i++) {
 				_collide_head(i);
+				if (body_on) {
+					_collide_body(i);
+				}
+				if (obstacle_on) {
+					_collide_obstacle(i);
+				}
 			}
 		}
 

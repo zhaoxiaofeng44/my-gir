@@ -120,6 +120,9 @@ void XPBDClothNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("sub_begin"), &XPBDClothNative::sub_begin);
 	ClassDB::bind_method(D_METHOD("begin_contacts"), &XPBDClothNative::begin_contacts);
 	ClassDB::bind_method(D_METHOD("sub_integrate", "h", "wind"), &XPBDClothNative::sub_integrate);
+	ClassDB::bind_method(D_METHOD("set_wind_v", "v"), &XPBDClothNative::set_wind_v);
+	ClassDB::bind_method(D_METHOD("get_wind_v"), &XPBDClothNative::get_wind_v);
+	ClassDB::bind_method(D_METHOD("translate_model", "delta"), &XPBDClothNative::translate_model);
 	ClassDB::bind_method(D_METHOD("sub_solve", "h"), &XPBDClothNative::sub_solve);
 	ClassDB::bind_method(D_METHOD("self_collision"), &XPBDClothNative::self_collision);
 	ClassDB::bind_method(D_METHOD("object_collision"), &XPBDClothNative::object_collision);
@@ -215,6 +218,23 @@ void XPBDClothNative::_add_constraint(int ia, int ib, int ctype) {
 	c_rest.push_back(pos[ia].distance_to(pos[ib]));
 	c_alive.push_back(1);
 	c_type.push_back(ctype);
+}
+
+// 模型平移(拖拽跟随): 所有粒子(含钉住的)平移 delta, 并给非钉住粒子继承速度产生摆动
+void XPBDClothNative::translate_model(const Vector3 &delta) {
+	if (delta.length_squared() < 1e-12f) {
+		return;
+	}
+	for (int i = 0; i < pos.size(); i++) {
+		pos.set(i, pos[i] + delta);
+	}
+	// 速度继承: 让布料有拖拽惯性(向下折算, 避免过度摆动)
+	const Vector3 inherit = delta * 20.0f;
+	for (int i = 0; i < pos.size(); i++) {
+		if (pinned[i] != 1) {
+			vel.set(i, vel[i] + inherit);
+		}
+	}
 }
 
 void XPBDClothNative::build() {
@@ -370,6 +390,8 @@ void XPBDClothNative::sub_begin() {
 }
 
 void XPBDClothNative::sub_integrate(real_t h, const Vector3 &wind) {
+	// 成员 wind = 环境风(每子步恒定作用), 参数 wind = 阵风等瞬时叠加
+	const Vector3 w_total = this->wind + wind;
 	const int n = pos.size();
 	real_t mv2 = 0.0;
 	for (int i = 0; i < n; i++) {
@@ -377,7 +399,7 @@ void XPBDClothNative::sub_integrate(real_t h, const Vector3 &wind) {
 			continue;
 		}
 		prev.set(i, pos[i]);
-		Vector3 v = vel[i] + gravity * h + wind * h;
+		Vector3 v = vel[i] + gravity * h + w_total * h;
 		v *= (1.0f - damping);
 		v -= v * v.length() * air_drag * h;
 		vel.set(i, v);

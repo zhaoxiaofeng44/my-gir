@@ -60,6 +60,14 @@ private:
 	Color tip_color = Color(0.45f, 0.30f, 0.16f);
 	Color albedo = Color(0.45f, 0.35f, 0.25f);
 
+	// ---- 模型变换(头发跟随身体移动/旋转) ----
+	// roots/head_center/body 胶囊都存在"模型空间", 每子步变换到世界空间。
+	// 模型移动时只改 model_origin/model_yaw, 发根自动跟随, 且粒子继承模型速度(惯性)。
+	Vector3 model_origin = Vector3();
+	real_t model_yaw = 0.0f;
+	Vector3 model_prev_origin = Vector3();
+	Vector3 model_vel = Vector3();   // 模型线速度(拖拽时产生, 让头发有拖拽惯性)
+
 	// ---- 粒子状态(导向发束) ----
 	PackedVector3Array pos;   // strand_count * (segment_count+1)
 	PackedVector3Array prev;
@@ -166,6 +174,10 @@ public:
 	void set_head_moving(bool v) { head_moving = v; }
 	void set_wind(const Vector3 &v) { wind = v; }
 	Vector3 get_wind() const { return wind; }
+	void set_model_transform(const Vector3 &origin, real_t yaw_deg);
+	void translate_follow(const Vector3 &delta);
+	Vector3 get_model_origin() const { return model_origin; }
+	real_t get_model_yaw() const { return model_yaw; }
 	void set_body_collision(bool on, const Vector3 &a, const Vector3 &b, real_t r) {
 		body_on = on; body_a = a; body_b = b; body_r = r;
 	}

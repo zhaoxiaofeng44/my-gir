@@ -78,6 +78,9 @@ private:
 	bool enable_object_collision = true;
 	bool enable_self_collision = true;
 	real_t ground_y = -1.6;
+	Vector3 wind = Vector3(); // 风力(加速度)
+	Vector3 model_origin = Vector3();
+	real_t model_yaw_deg = 0.0f;
 
 	// ---- 抓取 ----
 	bool grabbing = false;
@@ -222,6 +225,9 @@ public:
 	void set_enable_self_collision(bool v) { enable_self_collision = v; }
 	bool get_enable_self_collision() const { return enable_self_collision; }
 	void set_ground_y(real_t v) { ground_y = v; }
+	void set_wind_v(const Vector3 &v) { wind = v; }
+	Vector3 get_wind_v() const { return wind; }
+	void translate_model(const Vector3 &delta);
 	real_t get_ground_y() const { return ground_y; }
 	void set_iterations(int v) { iterations = v; }
 	int get_iterations() const { return iterations; }
