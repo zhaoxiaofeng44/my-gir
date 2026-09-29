@@ -133,7 +133,9 @@ public:
 
 	PackedVector3Array get_positions() const { return pos; }
 	int get_guide_count() const { return strand_count; }
-	int get_render_count() const { return render_strands; }
+	// 实际落地发丝数(采样过滤后可能少于请求值)
+	int get_render_count() const { return blend_k > 0 ? (int)(blend_idx.size() / blend_k) : 0; }
+	int get_render_requested() const { return render_strands; }
 	real_t get_tri_r() const { return 0.0f; }
 	bool get_asleep() const { return false; }
 
@@ -151,7 +153,14 @@ public:
 	real_t get_damping() const { return damping; }
 	void set_stiffness(real_t v) { stiffness = v; }
 	real_t get_stiffness() const { return stiffness; }
-	void set_render_strands(int v) { render_strands = v; }
+	void set_render_strands(int v) {
+		if (v == render_strands) {
+			return;
+		}
+		render_strands = v;
+		blend_idx.clear(); // 使插值权重失效, 下次 update_mesh 重建
+		blend_w.clear();
+	}
 	int get_render_strands() const { return render_strands; }
 	void set_strand_width(real_t v) { strand_width = v; }
 	real_t get_strand_width() const { return strand_width; }

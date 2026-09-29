@@ -20,6 +20,7 @@ void XPBDHairNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_positions"), &XPBDHairNative::get_positions);
 	ClassDB::bind_method(D_METHOD("get_guide_count"), &XPBDHairNative::get_guide_count);
 	ClassDB::bind_method(D_METHOD("get_render_count"), &XPBDHairNative::get_render_count);
+	ClassDB::bind_method(D_METHOD("get_render_requested"), &XPBDHairNative::get_render_requested);
 	ClassDB::bind_method(D_METHOD("get_segment_count"), &XPBDHairNative::get_segment_count);
 	ClassDB::bind_method(D_METHOD("get_tri_r"), &XPBDHairNative::get_tri_r);
 	ClassDB::bind_method(D_METHOD("get_asleep"), &XPBDHairNative::get_asleep);
@@ -201,6 +202,9 @@ void XPBDHairNative::translate_follow(const Vector3 &delta) {
 
 void XPBDHairNative::build() {
 	_build_strands();
+	// 头皮采样变了 -> 插值权重必须重建(否则沿用旧权重会索引到不存在的导向束)
+	blend_idx.clear();
+	blend_w.clear();
 	// 材质: 顶点色渐变(发根/发梢), 双面
 	{
 		Ref<StandardMaterial3D> m;
@@ -384,12 +388,17 @@ void XPBDHairNative::_build_render_strands() {
 	blend_idx.resize(render_strands * blend_k);
 	blend_w.resize(render_strands * blend_k);
 
-	// 渲染发根: 在头皮上再采一批(密度更高), 每个找 K 近邻导向发根
+	// 渲染发根: 在头皮上再采一批(密度更高), 每个找 K 近邻导向发根。
+	// 注意: 早先的写法把 y/n.z 过滤直接叠在定数 total=3n 的循环里, 过滤会丢掉
+	// ~50% 采样点(y<0.05 砍掉近半球, n.z<-0.9 砍掉后脑), 于是实际发丝数只有请求的
+	// 一半 —— 这正是"头发太稀疏"的根因。现在改为按需扩样, 保证足量。
 	std::vector<Vector3> rr_roots;
-	const int total = render_strands * 3;
+	rr_roots.reserve(render_strands);
 	const real_t golden = 3.14159265359f * (3.0f - std::sqrt(5.0f));
-	for (int i = 0; i < total && (int)rr_roots.size() < render_strands; i++) {
-		const real_t y = 1.0f - (2.0f * (real_t)i + 1.0f) / (real_t)total;
+	// 上限保护: 采样点数随请求线性增长, 避免病态参数导致长时间循环
+	const int max_samples = render_strands * 40 + 4096;
+	for (int i = 0; i < max_samples && (int)rr_roots.size() < render_strands; i++) {
+		const real_t y = 1.0f - (2.0f * (real_t)i + 1.0f) / (real_t)max_samples;
 		if (y < 0.05f) {
 			continue;
 		}
@@ -443,20 +452,26 @@ void XPBDHairNative::update_mesh() {
 	if (!built) {
 		return;
 	}
-	// 插值权重只需构建一次
+	// 插值权重只需构建一次(可按需重建: render_strands 改变时由 setter 清空)
 	if (blend_idx.size() == 0) {
 		_build_render_strands();
+	}
+	// 以"实际权重条数"为准, 而不是请求值: 采样过滤可能只落地更少的发丝,
+	// 用请求值分配数组会导致索引越界/渲染空条(早先 build() 二次调用崩溃即源于此)。
+	const int n_render = blend_k > 0 ? (int)(blend_idx.size() / blend_k) : 0;
+	if (n_render <= 0) {
+		return;
 	}
 
 	const int np = segment_count + 1;
 	PackedVector3Array verts;
 	PackedColorArray colors;
 	PackedInt32Array indices;
-	verts.resize(render_strands * np * 2);
-	colors.resize(render_strands * np * 2);
+	verts.resize(n_render * np * 2);
+	colors.resize(n_render * np * 2);
 
 	// 每渲染发丝的横向铺开方向: 用其发根法线与重力混合的叉积(稳定, 不随相机变化)
-	for (int r = 0; r < render_strands; r++) {
+	for (int r = 0; r < n_render; r++) {
 		const int g0 = blend_idx[r * blend_k];
 		Vector3 lateral = root_normals[g0].cross(Vector3(0, 1, 0));
 		if (lateral.length_squared() < 1e-10f) {
@@ -483,7 +498,7 @@ void XPBDHairNative::update_mesh() {
 		}
 	}
 
-	for (int r = 0; r < render_strands; r++) {
+	for (int r = 0; r < n_render; r++) {
 		for (int k = 0; k + 1 < np; k++) {
 			const int v00 = (r * np + k) * 2;
 			const int v01 = v00 + 1;
