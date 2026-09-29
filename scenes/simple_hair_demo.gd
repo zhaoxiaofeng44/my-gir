@@ -116,6 +116,9 @@ func _ready() -> void:
 			pinned.set(i, 1 if r == 0 else 0)
 	skirt.set_positions(pos)
 	skirt.set_pinned_flags(pinned)
+	# 关键: 环形布局与 build() 的网格间距不同, 必须重算静止长度,
+	# 否则求解器会把裙布撑开去满足旧静止长度(实测被拉长6倍摊到地上)
+	skirt.refresh_rest_lengths()
 	# 身体胶囊碰撞: 裙布不穿进身体(与头发同一颗胶囊, 拖拽时一同移动)
 	skirt.set_body_capsule(true, Vector3(0, 1.42, 0), Vector3(0, 0.55, 0), 0.17)
 	var sm := StandardMaterial3D.new()

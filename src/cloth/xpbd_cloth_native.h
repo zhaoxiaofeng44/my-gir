@@ -172,6 +172,9 @@ public:
 	// ---- 状态访问 ----
 	PackedVector3Array get_positions() const { return pos; }
 	void set_positions(const PackedVector3Array &p) { pos = p; }
+	// 自定义顶点布局后必须调用: 按当前顶点位置重算约束静止长度。
+	// 否则静止长度仍是 build() 时网格间距, 求解器会把布撑开去满足它(实测裙布被拉长6倍摊到地上)。
+	void refresh_rest_lengths();
 	PackedVector3Array get_velocities() const { return vel; }
 	void set_velocities(const PackedVector3Array &v) { vel = v; }
 	PackedByteArray get_pinned_flags() const { return pinned; }

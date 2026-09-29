@@ -125,6 +125,7 @@ void XPBDClothNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("translate_model", "delta"), &XPBDClothNative::translate_model);
 	ClassDB::bind_method(D_METHOD("set_body_capsule", "on", "a", "b", "r"), &XPBDClothNative::set_body_capsule);
 	ClassDB::bind_method(D_METHOD("collide_body_capsule"), &XPBDClothNative::collide_body_capsule);
+	ClassDB::bind_method(D_METHOD("refresh_rest_lengths"), &XPBDClothNative::refresh_rest_lengths);
 	ClassDB::bind_method(D_METHOD("sub_solve", "h"), &XPBDClothNative::sub_solve);
 	ClassDB::bind_method(D_METHOD("self_collision"), &XPBDClothNative::self_collision);
 	ClassDB::bind_method(D_METHOD("object_collision"), &XPBDClothNative::object_collision);
@@ -238,6 +239,17 @@ void XPBDClothNative::translate_model(const Vector3 &delta) {
 	for (int i = 0; i < pos.size(); i++) {
 		if (pinned[i] != 1) {
 			vel.set(i, vel[i] + inherit);
+		}
+	}
+}
+
+// 按当前顶点位置重算所有约束的静止长度(GDScript 自定义布局后调用)
+void XPBDClothNative::refresh_rest_lengths() {
+	for (int c = 0; c < c_ia.size(); c++) {
+		const int ia = c_ia[c];
+		const int ib = c_ib[c];
+		if (ia < pos.size() && ib < pos.size()) {
+			c_rest.set(c, pos[ia].distance_to(pos[ib]));
 		}
 	}
 }

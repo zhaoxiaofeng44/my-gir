@@ -52,7 +52,14 @@ func _level(tag: String, wind: int, shake: bool, drag: bool) -> void:
 			var r: Array = _audit()
 			bad += r[0]
 			worst = maxf(worst, r[1])
-	print("%s: 穿身点=%d 最深=%.2fmm" % [tag, bad, worst * 1000.0])
+	var vs: PackedVector3Array = scene.skirt.get_positions()
+	var rad := 0.0
+	var lo := 999.0
+	for i in vs.size():
+		rad = maxf(rad, Vector2(vs[i].x - cap_a.x, vs[i].z - cap_a.z).length())
+		lo = minf(lo, vs[i].y)
+	print("%s: 穿身点=%d 最深=%.2fmm | 裙布最大半径=%.3fm(应<0.35, 塌地会>1) 最低y=%.3f" % [
+		tag, bad, worst * 1000.0, rad, lo])
 
 func _audit() -> Array:
 	var vs: PackedVector3Array = scene.skirt.get_positions()
