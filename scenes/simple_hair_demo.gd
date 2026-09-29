@@ -18,6 +18,9 @@ var cam_pitch := -0.15
 var cam_dist := 2.6
 var shaking := false
 var paused := false
+var wind_level := 0
+var wind_levels: Array = [Vector3(0,0,0), Vector3(3,0.5,2), Vector3(8,1,5), Vector3(15,2,10)]
+var wind_names: Array = ["无风", "微风", "强风", "阵风"]
 var model_root: Node3D
 
 func _ready() -> void:
@@ -161,6 +164,7 @@ func _process(delta: float) -> void:
 		head.position.z = head_c.z
 	hair.set_head_center(head_c)
 	hair.set_head_moving(shaking)
+	hair.set_wind(wind_levels[wind_level])
 	hair.step(dt, 3)
 	# 裙布步进(2 子步)
 	var sh := dt / 2.0
@@ -210,5 +214,8 @@ func _input(event: InputEvent) -> void:
 					var v: PackedVector3Array = skirt.get_velocities()
 					v.set(i, v[i] + Vector3(1.2, 0.4, 0.5))
 					skirt.set_velocities(v)
+		elif k.keycode == KEY_W:
+			wind_level = (wind_level + 1) % wind_levels.size()
+			print("风力: ", wind_names[wind_level])
 		elif k.keycode == KEY_R:
 			get_tree().reload_current_scene()

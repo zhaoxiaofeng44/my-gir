@@ -56,6 +56,8 @@ void XPBDHairNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_obstacle_c"), &XPBDHairNative::get_obstacle_c);
 	ClassDB::bind_method(D_METHOD("get_obstacle_r"), &XPBDHairNative::get_obstacle_r);
 	ClassDB::bind_method(D_METHOD("set_head_moving", "v"), &XPBDHairNative::set_head_moving);
+	ClassDB::bind_method(D_METHOD("set_wind", "v"), &XPBDHairNative::set_wind);
+	ClassDB::bind_method(D_METHOD("get_wind"), &XPBDHairNative::get_wind);
 	ClassDB::bind_method(D_METHOD("get_mesh"), &XPBDHairNative::get_mesh);
 }
 
@@ -183,7 +185,7 @@ void XPBDHairNative::step(real_t delta, int substeps) {
 				continue; // 发根钉在头皮上
 			}
 			prev.set(i, pos[i]);
-			Vector3 v = vel[i] + Vector3(0, -9.8f * gravity_scale, 0) * h + head_vel;
+			Vector3 v = vel[i] + Vector3(0, -9.8f * gravity_scale, 0) * h + head_vel + wind;
 			v *= (1.0f - damping);
 			vel.set(i, v);
 			pos.set(i, pos[i] + v * h);

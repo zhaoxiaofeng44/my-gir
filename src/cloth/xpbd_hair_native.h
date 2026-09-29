@@ -46,6 +46,7 @@ private:
 	// ---- 物理 ----
 	real_t gravity_scale = 1.0f;
 	real_t damping = 0.06f;
+	Vector3 wind = Vector3();  // 风力(加速度, m/s^2), 方向可调
 	real_t stiffness = 0.7f;     // 弯曲刚度 0..1 (映射到弯曲约束刚性)
 	real_t root_stiffness = 0.9f; // 靠发根处额外刚性(发根更硬)
 	real_t collide_radius = 0.008f; // 发丝碰撞半径(m)
@@ -163,6 +164,8 @@ public:
 	Vector3 get_obstacle_c() const { return obstacle_c; }
 	real_t get_obstacle_r() const { return obstacle_r; }
 	void set_head_moving(bool v) { head_moving = v; }
+	void set_wind(const Vector3 &v) { wind = v; }
+	Vector3 get_wind() const { return wind; }
 	void set_body_collision(bool on, const Vector3 &a, const Vector3 &b, real_t r) {
 		body_on = on; body_a = a; body_b = b; body_r = r;
 	}
