@@ -22,3 +22,8 @@ godot-cpp/
 addons/cloth_native/bin/
 *.os
 *.dblite
+
+# ── 开发过程验证截图(根目录散落, 非交付物) ──
+# 结论性截图已归档到 docs/shots/ , 根目录临时截图不入库
+/*.png
+/*.png.import
