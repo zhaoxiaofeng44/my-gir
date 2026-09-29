@@ -90,6 +90,8 @@ func _ready() -> void:
 	hair.set_hair_length(0.30)
 	hair.set_head_radius(0.118)
 	hair.set_head_center(Vector3(0, 1.55, 0))
+	# 身体胶囊碰撞: 头发垂到身上不穿模(肩部1.42 -> 臀部0.55, 半径0.17)
+	hair.set_body_collision(true, Vector3(0, 1.42, 0), Vector3(0, 0.55, 0), 0.17)
 	hair.set_render_strands(300)
 	hair.set_stiffness(0.55)
 	hair.set_damping(0.09)

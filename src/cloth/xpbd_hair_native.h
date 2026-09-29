@@ -97,11 +97,18 @@ private:
 	Vector3 obstacle_c = Vector3(0, -0.1f, 0);
 	real_t obstacle_r = 0.09f;
 
+	// ---- 身体胶囊碰撞(头发垂到身上不穿模) ----
+	bool body_on = true;
+	Vector3 body_a = Vector3(0, 1.42f, 0);   // 胶囊上端(肩部)
+	Vector3 body_b = Vector3(0, 0.55f, 0);   // 胶囊下端(臀部)
+	real_t body_r = 0.17f;                    // 身体半径
+
 	// ---- 内部 ----
 	void _build_strands();
 	void _build_render_strands();
 	void _collide_head(int i);
 	void _collide_obstacle(int i);
+	void _collide_body(int i);
 	void _relax_chain(const PackedInt32Array &cand_a, const PackedInt32Array &cand_b, int passes);
 
 protected:
@@ -156,6 +163,13 @@ public:
 	Vector3 get_obstacle_c() const { return obstacle_c; }
 	real_t get_obstacle_r() const { return obstacle_r; }
 	void set_head_moving(bool v) { head_moving = v; }
+	void set_body_collision(bool on, const Vector3 &a, const Vector3 &b, real_t r) {
+		body_on = on; body_a = a; body_b = b; body_r = r;
+	}
+	bool get_body_on() const { return body_on; }
+	Vector3 get_body_a() const { return body_a; }
+	Vector3 get_body_b() const { return body_b; }
+	real_t get_body_r() const { return body_r; }
 
 	// 布间/物体接口(与布料一致的语义, 供场景统一调度)
 	void reset_wind() {}

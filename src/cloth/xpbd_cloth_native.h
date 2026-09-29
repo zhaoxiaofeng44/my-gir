@@ -166,6 +166,7 @@ public:
 	PackedVector3Array get_velocities() const { return vel; }
 	void set_velocities(const PackedVector3Array &v) { vel = v; }
 	PackedByteArray get_pinned_flags() const { return pinned; }
+	void set_pinned_flags(const PackedByteArray &v) { pinned = v; }
 
 	// ---- 审计/抓取 ----
 	int penetration_count() const;

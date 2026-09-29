@@ -51,6 +51,7 @@ void XPBDHairNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_material", "m"), &XPBDHairNative::set_material);
 	ClassDB::bind_method(D_METHOD("get_material"), &XPBDHairNative::get_material);
 	ClassDB::bind_method(D_METHOD("set_obstacle", "on", "c", "r"), &XPBDHairNative::set_obstacle);
+	ClassDB::bind_method(D_METHOD("set_body_collision", "on", "a", "b", "r"), &XPBDHairNative::set_body_collision);
 	ClassDB::bind_method(D_METHOD("get_obstacle_on"), &XPBDHairNative::get_obstacle_on);
 	ClassDB::bind_method(D_METHOD("get_obstacle_c"), &XPBDHairNative::get_obstacle_c);
 	ClassDB::bind_method(D_METHOD("get_obstacle_r"), &XPBDHairNative::get_obstacle_r);
@@ -219,13 +220,20 @@ void XPBDHairNative::step(real_t delta, int substeps) {
 			for (int s2 = 0; s2 < (int)roots.size(); s2++) {
 				pos.set(s2 * (segment_count + 1), roots[s2]);
 			}
+			// 松弛会把粒子推回头部内(约束不感知碰撞) -> 每轮松弛后再做一次头部碰撞
+			for (int i = 0; i < n; i++) {
+				_collide_head(i);
+			}
 		}
 
-		// --- 头部碰撞 + 可移动障碍球 ---
+		// --- 头部碰撞 + 障碍球 + 身体胶囊 ---
 		for (int i = 0; i < n; i++) {
 			_collide_head(i);
 			if (obstacle_on) {
 				_collide_obstacle(i);
+			}
+			if (body_on) {
+				_collide_body(i);
 			}
 		}
 
@@ -253,6 +261,26 @@ void XPBDHairNative::_collide_obstacle(int i) {
 	const real_t ln = std::sqrt(MAX(d2, 1e-12f));
 	const Vector3 nrm = ln > 1e-9f ? d / ln : Vector3(0, 1, 0);
 	pos.set(i, obstacle_c + nrm * rr);
+	Vector3 v = vel[i];
+	const real_t vn = v.dot(nrm);
+	if (vn < 0.0f) {
+		v -= nrm * vn * (1.0f - friction);
+		vel.set(i, v);
+	}
+}
+
+// 身体胶囊碰撞: 头发垂到身上不穿模(与布料碰撞同款 线段-点 最近距离)
+void XPBDHairNative::_collide_body(int i) {
+	const Vector3 nearPt = cloth_internal::closest_on_seg(body_a, body_b, pos[i]);
+	const Vector3 d = pos[i] - nearPt;
+	const real_t rr = body_r + collide_radius;
+	const real_t d2 = d.length_squared();
+	if (d2 >= rr * rr) {
+		return;
+	}
+	const real_t ln = std::sqrt(MAX(d2, 1e-12f));
+	const Vector3 nrm = ln > 1e-9f ? d / ln : Vector3(0, 1, 0);
+	pos.set(i, nearPt + nrm * rr);
 	Vector3 v = vel[i];
 	const real_t vn = v.dot(nrm);
 	if (vn < 0.0f) {

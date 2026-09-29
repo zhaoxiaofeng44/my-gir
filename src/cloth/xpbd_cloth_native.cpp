@@ -130,6 +130,7 @@ void XPBDClothNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_velocities"), &XPBDClothNative::get_velocities);
 	ClassDB::bind_method(D_METHOD("set_velocities", "v"), &XPBDClothNative::set_velocities);
 	ClassDB::bind_method(D_METHOD("get_pinned_flags"), &XPBDClothNative::get_pinned_flags);
+	ClassDB::bind_method(D_METHOD("set_pinned_flags", "v"), &XPBDClothNative::set_pinned_flags);
 	ClassDB::bind_method(D_METHOD("penetration_count"), &XPBDClothNative::penetration_count);
 	ClassDB::bind_method(D_METHOD("self_deficit"), &XPBDClothNative::self_deficit);
 	ClassDB::bind_method(D_METHOD("pick_vertex", "ro", "rn"), &XPBDClothNative::pick_vertex);
@@ -159,8 +160,6 @@ void XPBDClothNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_mesh"), &XPBDClothNative::get_mesh);
 	ClassDB::bind_method(D_METHOD("set_material", "m"), &XPBDClothNative::set_material);
 	ClassDB::bind_method(D_METHOD("get_material"), &XPBDClothNative::get_material);
-	ClassDB::bind_method(D_METHOD("set_albedo", "c"), &XPBDClothNative::set_albedo);
-	ClassDB::bind_method(D_METHOD("get_albedo"), &XPBDClothNative::get_albedo);
 
 	// 属性(便于 GDScript 侧直接读写)。类型必须与 getter/setter 一致, 否则 create_method_bind 编译失败。
 #define BIND_P(name, getter, setter, vtype) \
