@@ -62,29 +62,43 @@ func _ready() -> void:
 	hud.position = Vector2(16, 16)
 	add_child(hud)
 
-	# --- 加载 HS2 角色 ---
+	# --- HS2 角色延迟加载: 加载耗时长, 先起场景再异步构建(避免启动窗口超时) ---
+	if hud:
+		hud.text = "角色加载中... (首次约 10-20 秒)"
+	call_deferred("_load_character_async")
+
+func _load_character_async() -> void:
 	character = Node3D.new()
 	character.name = "Character"
-	add_child(character)
 	var script: GDScript = load("res://hs2/hs2_character.gd")
 	character.set_script(script)
-	# 找合并骨架
-	for i in 8:
+	add_child(character)
+	# 等待骨架出现(HS2 _ready 构建合并骨架), 最多 900 帧
+	var sk: Skeleton3D = null
+	for i in 900:
 		await get_tree().process_frame
-	var stack: Array = [character]
-	while stack.size() > 0:
-		var n = stack.pop_back()
-		for c in n.get_children():
-			stack.append(c)
-		if n is Skeleton3D and sk == null:
-			sk = n
-	if sk:
-		head_bone = sk.find_bone("cf_J_Head_s")
-		if head_bone < 0:
-			head_bone = sk.find_bone("cf_J_Head")
-		hip_bone = sk.find_bone("cf_J_Hips")
-		if hip_bone < 0:
-			hip_bone = sk.find_bone("cf_J_Hips_s")
+		var stack: Array = [character]
+		while stack.size() > 0:
+			var n = stack.pop_back()
+			for c in n.get_children():
+				stack.append(c)
+			if n is Skeleton3D:
+				sk = n
+				break
+		if sk:
+			break
+	if sk == null:
+		if hud:
+			hud.text = "角色加载失败"
+		return
+	head_bone = sk.find_bone("cf_J_Head_s")
+	if head_bone < 0:
+		head_bone = sk.find_bone("cf_J_Head")
+	hip_bone = sk.find_bone("cf_J_Hips")
+	if hip_bone < 0:
+		hip_bone = sk.find_bone("cf_J_Hips_s")
+	if hud:
+		hud.text = "角色就绪 (骨骼 %d)" % sk.get_bone_count()
 	_setup_native_hair()
 	_setup_skirt()
 
