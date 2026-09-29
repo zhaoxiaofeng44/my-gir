@@ -123,6 +123,8 @@ void XPBDClothNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_wind_v", "v"), &XPBDClothNative::set_wind_v);
 	ClassDB::bind_method(D_METHOD("get_wind_v"), &XPBDClothNative::get_wind_v);
 	ClassDB::bind_method(D_METHOD("translate_model", "delta"), &XPBDClothNative::translate_model);
+	ClassDB::bind_method(D_METHOD("set_body_capsule", "on", "a", "b", "r"), &XPBDClothNative::set_body_capsule);
+	ClassDB::bind_method(D_METHOD("collide_body_capsule"), &XPBDClothNative::collide_body_capsule);
 	ClassDB::bind_method(D_METHOD("sub_solve", "h"), &XPBDClothNative::sub_solve);
 	ClassDB::bind_method(D_METHOD("self_collision"), &XPBDClothNative::self_collision);
 	ClassDB::bind_method(D_METHOD("object_collision"), &XPBDClothNative::object_collision);
@@ -228,6 +230,9 @@ void XPBDClothNative::translate_model(const Vector3 &delta) {
 	for (int i = 0; i < pos.size(); i++) {
 		pos.set(i, pos[i] + delta);
 	}
+	// 碰撞胶囊必须跟着模型走, 否则拖拽后胶囊留在原地 -> 碰撞完全错位(裙布穿身)
+	body_seg_a += delta;
+	body_seg_b += delta;
 	// 速度继承: 让布料有拖拽惯性(向下折算, 避免过度摆动)
 	const Vector3 inherit = delta * 20.0f;
 	for (int i = 0; i < pos.size(); i++) {
@@ -516,6 +521,41 @@ void XPBDClothNative::begin_contacts() {
 	pre_contact = pos.duplicate();
 	pushed_hard.fill(0);
 	pushed_soft.fill(0);
+}
+
+// 身体胶囊碰撞: 把所有粒子推出胶囊表面(裙布/衣服不穿进身体)。
+// 软接触语义: 修正不产生发射速度(同自碰), 保留切向滑移。
+void XPBDClothNative::collide_body_capsule() {
+	if (!body_collision_on) {
+		return;
+	}
+	const Vector3 ab = body_seg_b - body_seg_a;
+	const real_t len2 = ab.length_squared();
+	const real_t rr = body_seg_r + 0.008f; // + 布料半厚
+	const real_t rr2 = rr * rr;
+	for (int i = 0; i < pos.size(); i++) {
+		const Vector3 &p = pos[i];
+		// 胶囊 = 圆柱段 + 两端半球。t 必须 clamp(而非跳过), 否则端帽处无保护:
+		// 裙布正好垂在臀部下方, 跳过端帽会让裙布切进臀部/大腿。
+		const real_t raw = (p - body_seg_a).dot(ab) / len2;
+		const real_t t = raw < 0.0f ? 0.0f : (raw > 1.0f ? 1.0f : raw);
+		const Vector3 nearPt = body_seg_a + ab * t;
+		const Vector3 d = p - nearPt;
+		const real_t d2 = d.length_squared();
+		if (d2 >= rr2) {
+			continue;
+		}
+		const real_t ln = std::sqrt(MAX(d2, 1e-12f));
+		Vector3 nrm = ln > 1e-9f ? d / ln : Vector3(0, 0, 1);
+		pos.set(i, nearPt + nrm * rr);
+		// 法向速度清零(向内部分), 保留切向
+		Vector3 v = vel[i];
+		const real_t vn = v.dot(nrm);
+		if (vn < 0.0f) {
+			v -= nrm * vn;
+			vel.set(i, v);
+		}
+	}
 }
 
 

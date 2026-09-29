@@ -82,6 +82,12 @@ private:
 	Vector3 model_origin = Vector3();
 	real_t model_yaw_deg = 0.0f;
 
+	// ---- 身体胶囊碰撞(裙布/衣服不穿进身体) ----
+	bool body_collision_on = false;
+	Vector3 body_seg_a = Vector3(0, 1.42f, 0);
+	Vector3 body_seg_b = Vector3(0, 0.55f, 0);
+	real_t body_seg_r = 0.17f;
+
 	// ---- 抓取 ----
 	bool grabbing = false;
 	int grab_id = -1;
@@ -228,6 +234,10 @@ public:
 	void set_wind_v(const Vector3 &v) { wind = v; }
 	Vector3 get_wind_v() const { return wind; }
 	void translate_model(const Vector3 &delta);
+	void set_body_capsule(bool on, const Vector3 &a, const Vector3 &b, real_t r) {
+		body_collision_on = on; body_seg_a = a; body_seg_b = b; body_seg_r = r;
+	}
+	void collide_body_capsule();
 	real_t get_ground_y() const { return ground_y; }
 	void set_iterations(int v) { iterations = v; }
 	int get_iterations() const { return iterations; }

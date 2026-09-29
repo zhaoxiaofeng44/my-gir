@@ -116,6 +116,8 @@ func _ready() -> void:
 			pinned.set(i, 1 if r == 0 else 0)
 	skirt.set_positions(pos)
 	skirt.set_pinned_flags(pinned)
+	# 身体胶囊碰撞: 裙布不穿进身体(与头发同一颗胶囊, 拖拽时一同移动)
+	skirt.set_body_capsule(true, Vector3(0, 1.42, 0), Vector3(0, 0.55, 0), 0.17)
 	var sm := StandardMaterial3D.new()
 	sm.cull_mode = BaseMaterial3D.CULL_DISABLED
 	sm.roughness = 0.8
@@ -183,6 +185,7 @@ func _process(delta: float) -> void:
 		skirt.begin_contacts()
 		skirt.self_collision()
 		skirt.final_push_out()
+		skirt.collide_body_capsule()
 		skirt.sub_recover(sh)
 	hair.update_mesh()
 	hair_mesh.mesh = hair.get_mesh()
