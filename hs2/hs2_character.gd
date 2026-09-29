@@ -5,14 +5,15 @@ extends Node3D
 const HS2ShapeScript := preload("res://hs2/hs2_shape.gd")
 const HS2RigMerge := preload("res://hs2/hs2_rig_merge.gd")
 const SKIN_SHADER := preload("res://shaders/skin.gdshader")
+const HAIR_SHADER := preload("res://shaders/hair.gdshader")
 
 const DATA_DIR := "res://hs2/data"
 const PARTS_BODY := ["body", "top", "bot", "shoe"]
 const PARTS_ATTACH := ["head", "hair_f", "hair_b"]
 const POS_UNIT := 100.0   # 数据表位置单位（与 web 版 applyFaceMorphLegacy 一致）
-const HAIR_TINT := Color(0.80, 0.62, 0.45)   # HS2 发贴图为灰度+alpha，发色由材质决定
+const HAIR_TINT := Color(0.72, 0.55, 0.40)   # HS2 发贴图为灰度+alpha，发色由材质决定
 const MERGE_REV := "GOLDEN-ONLY rev2025-09-19"   # 屏幕/日志可见，用来确认跑的是哪一版
-const HAIR_PHYSICS := preload("res://hs2/hair_physics.gd")
+const HAIR_SYSTEM := preload("res://hs2/hair_system.gd")
 
 var model_root: Node3D
 var main_sk: Skeleton3D
@@ -44,10 +45,17 @@ func _ready() -> void:
 		var m := _find_mesh(nm)
 		if m != null:
 			_hair_nodes.append(m)
-	_hair_physics = HAIR_PHYSICS.new()
+	# 头发物理必须在 _collect_rest() 之前建：它会往骨架里加「发链骨」并重绑头发蒙皮
+	_hair_physics = HAIR_SYSTEM.new()
 	_hair_physics.name = "HairPhysics"
+	_hair_physics.steps = 0
 	add_child(_hair_physics)
-	_hair_physics.setup(main_sk)
+	_hair_physics.build(main_sk, {
+		"hair_f": _find_mesh("hair_f"),
+		"hair_b": _find_mesh("hair_b"),
+		"head": _find_mesh("head"),
+		"body": _find_mesh("body"),
+	})
 	_collect_rest()
 
 	for cid in shape_face.cat_map.keys():
@@ -58,6 +66,22 @@ func _ready() -> void:
 	_run_acceptance()   # 先算验收指标，再建 UI（面板顶部显示）
 	_build_ui()
 	_setup_camera()
+
+func _process(_d: float) -> void:
+	# 每 30 帧刷新一次头发物理机读指标（拉伸 / 链条最小间距 / 身体穿透）
+	if _hair_metric == null or _hair_physics == null:
+		return
+	_tick += 1
+	if _tick % 20 != 0:
+		return
+	_hair_physics._metric_stride = 8
+	_hair_physics.measure()
+	_hair_metric.text = "拉伸 %.3f%% · 链间距 %.1fmm · 穿透 %.1fmm/%d顶点" % [
+		_hair_physics.metric_max_stretch * 100.0,
+		_hair_physics.metric_min_sep * 1000.0,
+		_hair_physics.metric_max_pen * 1000.0,
+		_hair_physics.metric_pen_verts,
+	]
 
 func _instantiate(part: String) -> Dictionary:
 	var ps: PackedScene = load("res://hs2/model/%s.glb" % part)
@@ -174,6 +198,9 @@ func apply_shape() -> void:
 		main_sk.set_bone_pose_position(b, pos)
 		main_sk.set_bone_pose_rotation(b, quat)
 		main_sk.set_bone_pose_scale(b, scl)
+	# 身体形态变了 → 重新评估「哪些头发顶点可能穿模」（碰撞体与候选集都要跟着变）
+	if _hair_physics != null:
+		_hair_physics.rebuild_candidates()
 
 # ---------------- 材质 ----------------
 func _tex(fname: String) -> Texture2D:
@@ -192,6 +219,35 @@ func _mat(tex: Texture2D, alpha: bool) -> BaseMaterial3D:
 		m.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 		m.metallic_specular = 0.25
 	m.roughness = 0.7
+	return m
+
+# 头发材质：走 shaders/hair.gdshader（Kajiya-Kay 双叶各向异性 + 根梢渐变 + 假 AO + 透光）。
+# 发丝切线/根梢参数/朝内遮蔽由 hair_system.gd 在重绑蒙皮时**逐顶点烘焙进 TANGENT 与 COLOR**。
+func _hair_mat(tex: Texture2D) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = HAIR_SHADER
+	m.set_shader_parameter("albedo_texture", tex)
+	m.set_shader_parameter("hair_tint", HAIR_TINT)
+	m.set_shader_parameter("root_color", Color(0.50, 0.46, 0.44))
+	m.set_shader_parameter("tip_color", Color(1.08, 1.02, 0.96))
+	m.set_shader_parameter("grad_curve", 1.5)
+	m.set_shader_parameter("alpha_scissor", 0.35)
+	m.set_shader_parameter("tip_fade", 0.16)
+	m.set_shader_parameter("root_ao", 0.45)
+	m.set_shader_parameter("root_ao_len", 0.30)
+	m.set_shader_parameter("inner_ao", 0.40)
+	m.set_shader_parameter("primary_shift", 0.12)
+	m.set_shader_parameter("primary_power", 140.0)
+	m.set_shader_parameter("primary_gain", 0.08)
+	m.set_shader_parameter("secondary_shift", -0.28)
+	m.set_shader_parameter("secondary_power", 26.0)
+	m.set_shader_parameter("secondary_gain", 0.04)
+	m.set_shader_parameter("secondary_color", Color(0.86, 0.73, 0.56))
+	m.set_shader_parameter("translucency", 0.25)
+	m.set_shader_parameter("translucency_color", Color(0.78, 0.46, 0.28))
+	m.set_shader_parameter("rim", 0.10)
+	m.set_shader_parameter("roughness", 0.45)
+	m.set_shader_parameter("specular_amount", 0.30)
 	return m
 
 func _fix_materials(part: String, inst: Node) -> void:
@@ -225,14 +281,10 @@ func _fix_materials(part: String, inst: Node) -> void:
 				mi.set_surface_override_material(i, _mat(tex, alpha))
 		elif part == "hair_f":
 			for i in mi.mesh.get_surface_count():
-				var m := _mat(_tex("cf_t_hairfront_03_01-DXT5.png"), true)
-				m.albedo_color = HAIR_TINT
-				mi.set_surface_override_material(i, m)
+				mi.set_surface_override_material(i, _hair_mat(_tex("cf_t_hairfront_03_01-DXT5.png")))
 		elif part == "hair_b":
 			for i in mi.mesh.get_surface_count():
-				var m := _mat(_tex("cf_t_hairback_00_01-DXT5.png"), true)
-				m.albedo_color = HAIR_TINT
-				mi.set_surface_override_material(i, m)
+				mi.set_surface_override_material(i, _hair_mat(_tex("cf_t_hairback_00_01-DXT5.png")))
 
 # ---------------- UI ----------------
 func set_slider(section: String, cat_id: int, value: float) -> void:
@@ -291,15 +343,37 @@ func _build_ui() -> void:
 		cb.toggled.connect(func(on: bool): hn.visible = on)
 		row.add_child(cb)
 		box.add_child(row)
+	var ldisp := Label.new()
+	ldisp.text = "———— 头发显示 ————"
+	box.add_child(ldisp)
+	var disp := OptionButton.new()
+	disp.add_item("头发网格", 0)
+	disp.add_item("仅物理发链", 1)
+	disp.add_item("网格 + 发链", 2)
+	disp.selected = _hair_physics.display_mode if _hair_physics else 0
+	disp.item_selected.connect(func(idx: int): if _hair_physics: _hair_physics.set_display_mode(idx))
+	box.add_child(disp)
+	box.add_child(_mk_check("画关节标记", _hair_physics.chain_show_joints if _hair_physics else false, func(on: bool): if _hair_physics: _hair_physics.chain_show_joints = on))
 	var lph := Label.new()
-	lph.text = "———— 头发物理 ————"
+	lph.text = "———— 头发物理（自实现发链系统）————"
 	box.add_child(lph)
-	box.add_child(_mk_check("启用弹性", _hair_physics.enabled if _hair_physics else false, func(on: bool): if _hair_physics: _hair_physics.set_enabled(on)))
-	box.add_child(_mk_phys("刚度", 0.0, 1.0, _hair_physics.stiffness if _hair_physics else 0.35, func(v: float): if _hair_physics: _hair_physics.stiffness = v))
-	box.add_child(_mk_phys("阻尼", 0.0, 1.0, _hair_physics.drag if _hair_physics else 0.60, func(v: float): if _hair_physics: _hair_physics.drag = v))
-	box.add_child(_mk_phys("重力", 0.0, 1.0, _hair_physics.gravity if _hair_physics else 0.05, func(v: float): if _hair_physics: _hair_physics.gravity = v))
-	box.add_child(_mk_phys("风力", -15.0, 15.0, _hair_physics.wind if _hair_physics else 0.0, func(v: float): if _hair_physics: _hair_physics.wind = v))
-	box.add_child(_mk_phys("头碰撞半径", 0.0, 0.12, _hair_physics.head_collision_radius if _hair_physics else 0.0, func(v: float): if _hair_physics: _hair_physics.head_collision_radius = v))
+	var hchain := Label.new()
+	hchain.text = "发链 %d 条（导引 %d + 插值 %d）" % [
+		_hair_physics.chain_count() if _hair_physics else 0,
+		_hair_physics.guide_count() if _hair_physics else 0,
+		(_hair_physics.chain_count() - _hair_physics.guide_count()) if _hair_physics else 0,
+	]
+	box.add_child(hchain)
+	_hair_metric = Label.new()
+	_hair_metric.text = "—"
+	box.add_child(_hair_metric)
+	box.add_child(_mk_check("启用头发物理", _hair_physics.enabled if _hair_physics else false, func(on: bool): if _hair_physics: _hair_physics.set_enabled(on)))
+	box.add_child(_mk_phys("刚度", 0.0, 1.0, _hair_physics.stiffness if _hair_physics else 0.45, func(v: float): if _hair_physics: _hair_physics.stiffness = v))
+	box.add_child(_mk_phys("阻尼", 0.0, 1.0, _hair_physics.drag if _hair_physics else 0.35, func(v: float): if _hair_physics: _hair_physics.drag = v))
+	box.add_child(_mk_phys("重力", 0.0, 20.0, _hair_physics.gravity if _hair_physics else 5.0, func(v: float): if _hair_physics: _hair_physics.gravity = v))
+	box.add_child(_mk_phys("风力", -25.0, 25.0, _hair_physics.wind.x if _hair_physics else 0.0, func(v: float): if _hair_physics: _hair_physics.wind = Vector3(v, 0, 0)))
+	box.add_child(_mk_phys("鸟群分离", 0.0, 0.08, _hair_physics.boid_separation if _hair_physics else 0.030, func(v: float): if _hair_physics: _hair_physics.boid_separation = v))
+	box.add_child(_mk_phys("碰撞半径×", 0.0, 1.5, _hair_physics.collision_radius_scale if _hair_physics else 1.0, func(v: float): if _hair_physics: _hair_physics.collision_radius_scale = v))
 	var lreset := Button.new()
 	lreset.text = "重置头发物理"
 	lreset.pressed.connect(func(): if _hair_physics: _hair_physics.reset_physics())
@@ -357,6 +431,8 @@ var _face_names: PackedStringArray = PackedStringArray()
 var _body_names: PackedStringArray = PackedStringArray()
 var _hair_nodes: Array = []
 var _hair_physics: Node
+var _hair_metric: Label
+var _tick := 0
 
 func _run_acceptance() -> void:
 	var lines: Array = []
