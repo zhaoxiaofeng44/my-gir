@@ -13,7 +13,32 @@ const PARTS_ATTACH := ["head", "hair_f", "hair_b"]
 const POS_UNIT := 100.0   # 数据表位置单位（与 web 版 applyFaceMorphLegacy 一致）
 const HAIR_TINT := Color(0.72, 0.55, 0.40)   # HS2 发贴图为灰度+alpha，发色由材质决定
 const MERGE_REV := "GOLDEN-ONLY rev2025-09-19"   # 屏幕/日志可见，用来确认跑的是哪一版
-const HAIR_SYSTEM := preload("res://hs2/hair_system.gd")
+const HAIR_NATIVE := preload("res://hs2/hair_native.gd")
+
+# ---------------- 头发(全部由 C++ XPBD 插件实现) ----------------
+# 说明: 原 hs2/hair_system.gd(HS2 自实现的 GDScript 发链物理)已**整体删除**。
+# 头发现在完全走 GDExtension 里的 XPBDHairNative —— 与
+# scenes/cloth_hair_test_suite.tscn / scenes/simple_hair_demo.tscn 是同一套算法:
+# 头皮发根采样、距离/弯曲约束、重力/阻尼/风、头部椭球+身体胶囊碰撞、渲染发丝插值。
+@export_group("头发(物理)")
+@export var hair_enabled := true           # 物理头发开关
+@export var hair_guide_count := 160        # 导向发束(物理密度)
+@export var hair_render_strands := 4000    # 渲染发丝(视觉密度)
+@export var hair_len_top := 0.26           # 头顶/侧后发长(m)
+@export var hair_len_bottom := 0.62        # 颈后发长(m)
+@export var hair_bang_len := 0.13          # 刘海长度(m)
+@export var hair_stiffness := 0.55         # 链约束刚度
+@export var hair_damping := 0.09           # 阻尼
+@export var hide_hair_shell := true        # 隐藏 HS2 头发贴片(物理头发替换贴片发型)
+@export var hair_wind := 0.0               # 风力(m/s²)
+
+@export_group("布料")
+@export var cloth_enabled := true          # 连衣裙布料(C++ XPBD，布料测试场景同款)
+@export var cloth_cols := 32
+@export var cloth_rows := 14
+@export var cloth_pin_rows := 2            # 钉住的行数(腰头)
+@export var cloth_wind := 0.0              # 风力(m/s²)
+@export var cloth_hidden := false          # 只跑物理不显示(调试)
 
 var model_root: Node3D
 var main_sk: Skeleton3D
@@ -45,17 +70,8 @@ func _ready() -> void:
 		var m := _find_mesh(nm)
 		if m != null:
 			_hair_nodes.append(m)
-	# 头发物理必须在 _collect_rest() 之前建：它会往骨架里加「发链骨」并重绑头发蒙皮
-	_hair_physics = HAIR_SYSTEM.new()
-	_hair_physics.name = "HairPhysics"
-	_hair_physics.steps = 0
-	add_child(_hair_physics)
-	_hair_physics.build(main_sk, {
-		"hair_f": _find_mesh("hair_f"),
-		"hair_b": _find_mesh("hair_b"),
-		"head": _find_mesh("head"),
-		"body": _find_mesh("body"),
-	})
+	# 布料: C++ XPBD(与布料测试场景同款)；头发在 apply_shape 之后建(要用到静止骨架)
+	_build_cloth()
 	_collect_rest()
 
 	for cid in shape_face.cat_map.keys():
@@ -64,24 +80,179 @@ func _ready() -> void:
 		sliders["body"][str(cid)] = 0.5
 	apply_shape()
 	_run_acceptance()   # 先算验收指标，再建 UI（面板顶部显示）
+	if hair_enabled:
+		_setup_hair_native()
 	_build_ui()
 	_setup_camera()
 
-func _process(_d: float) -> void:
-	# 每 30 帧刷新一次头发物理机读指标（拉伸 / 链条最小间距 / 身体穿透）
-	if _hair_metric == null or _hair_physics == null:
-		return
+func _process(d: float) -> void:
+	_shake_head(minf(d, 1.0 / 30.0))   # J 键甩头(直接转颈骨, 与动画/滑杆叠加)
+	_step_hair_native(d)
+	_step_cloth(d)
+	# 每 20 帧刷新一次头发机读指标
 	_tick += 1
 	if _tick % 20 != 0:
 		return
-	_hair_physics._metric_stride = 8
-	_hair_physics.measure()
-	_hair_metric.text = "拉伸 %.3f%% · 链间距 %.1fmm · 穿透 %.1fmm/%d顶点" % [
-		_hair_physics.metric_max_stretch * 100.0,
-		_hair_physics.metric_min_sep * 1000.0,
-		_hair_physics.metric_max_pen * 1000.0,
-		_hair_physics.metric_pen_verts,
-	]
+	if _hair_info != null and _hair_native != null:
+		var st: Dictionary = _hair_native.stats()
+		if not st.is_empty():
+			_hair_info.text = "物理发束 %d · 渲染发丝 %d · 粒子 %d" % [
+				st.get("guides", 0), st.get("render", 0), st.get("particles", 0)]
+
+# =====================================================================
+# C++ XPBD 物理头发(与"布料测试场景"同款求解器)
+# 发根贴着头皮走: 每帧由 A = S·pose(头骨)·rest(头骨)⁻¹ 算出世界发根下发。
+# =====================================================================
+func _setup_hair_native() -> void:
+	if not ClassDB.class_exists("XPBDHairNative"):
+		push_warning("[HS2] C++ 头发扩展未注册")
+		hair_enabled = false
+		return
+	var hn = HAIR_NATIVE.new()
+	hn.name = "HairNative"
+	hn.guide_count = hair_guide_count
+	hn.render_strands = hair_render_strands
+	hn.len_top = hair_len_top
+	hn.len_bottom = hair_len_bottom
+	hn.bang_len = hair_bang_len
+	hn.stiffness = hair_stiffness
+	hn.damping = hair_damping
+	hn.wind = Vector3(hair_wind, 0.0, 0.0)
+	add_child(hn)
+	var ok: bool = hn.build(main_sk, {
+		"head": _find_mesh("head"),
+		"body": _find_mesh("body"),
+	})
+	if not ok:
+		hn.queue_free()
+		push_warning("[HS2] 物理头发构建失败")
+		return
+	_hair_native = hn
+	_apply_hair_visibility()
+
+func _step_hair_native(d: float) -> void:
+	if _hair_native == null or not hair_enabled:
+		return
+	if _hair_rebuild_pending:
+		_hair_rebuild_pending = false
+		_hair_native.reset_physics()
+	var dt: float = minf(d, 1.0 / 30.0)
+	_hair_native.set_wind(Vector3(hair_wind, 0.0, 0.0))
+	_hair_native.step(dt)
+
+func _apply_hair_visibility() -> void:
+	var native_on: bool = hair_enabled and _hair_native != null
+	# HS2 头发贴片(发壳)：物理头发默认隐藏它，避免两套头发叠在一起
+	for hn in _hair_nodes:
+		if hn is Node3D:
+			hn.visible = not (native_on and hide_hair_shell)
+	if _hair_native != null:
+		_hair_native.enabled = native_on
+		var m: MeshInstance3D = _hair_native.mesh_node()
+		if m != null:
+			m.visible = native_on
+		var p = _hair_native.native_node()
+		if p != null:
+			p.visible = native_on
+
+func set_hair_enabled(on: bool) -> void:
+	hair_enabled = on
+	if on and _hair_native == null:
+		_setup_hair_native()
+	_apply_hair_visibility()
+
+func set_hair_shell_visible(on: bool) -> void:
+	hide_hair_shell = not on
+	_apply_hair_visibility()
+
+# =====================================================================
+# 环形裙布(C++ XPBD 布料，与"布料测试场景"同款)
+# =====================================================================
+func _build_cloth() -> void:
+	if not ClassDB.class_exists("XPBDClothNative"):
+		push_warning("[HS2] C++ 布料扩展未注册，跳过裙布")
+		return
+	# ---- 用身体顶点实测「腰」: 腰高 + 腰半径 + 髋半径 ----
+	# (原来写死 hip 骨 - 0.02 会算到 -0.02m, 因为 HS2 的装配空间是 Y 向下的)
+	var body_mi := _find_mesh("body")
+	var wi: Dictionary = _hair_native.waist_info(body_mi) if _hair_native != null else {}
+	if wi.is_empty():
+		wi = {"y": 1.05, "r": 0.16, "hip_r": 0.19, "h": 1.7, "floor": 0.0}
+	_cloth_cy = wi["y"]
+	_cloth_R = maxf(wi["r"] + 0.012, 0.10)
+	var len_total: float = clampf(wi["h"] * 0.42, 0.35, 0.62)
+
+	_cloth = XPBDClothNative.new()
+	_cloth.name = "SkirtCloth"
+	_cloth.top_level = true
+	add_child(_cloth)
+	_cloth.cols = cloth_cols
+	_cloth.rows = cloth_rows
+	_cloth.ground_y = wi["floor"]
+	_cloth.enable_self_collision = true
+	_cloth.set_wind_v(Vector3(cloth_wind, 0.0, 0.0))
+	_cloth.build()
+	# 逐行向下做环形布局(沿用布料测试场景里验证过的写法); 腰头钉住(前 cloth_pin_rows 行)
+	var pos: PackedVector3Array = _cloth.get_positions()
+	var pinned: PackedByteArray = _cloth.get_pinned_flags()
+	var hip_r: float = wi["hip_r"]
+	var hem_r: float = maxf(hip_r * 1.35, 0.24)
+	for r in cloth_rows:
+		for c in cloth_cols:
+			var i: int = r * cloth_cols + c
+			var ang: float = TAU * float(c) / float(cloth_cols)
+			var t: float = float(r) / float(maxi(cloth_rows - 1, 1))
+			# 半径: 腰 -> 髋 -> 裙摆(自然外扩)
+			var rr: float = _cloth_R
+			if t < 0.30:
+				rr = lerpf(_cloth_R, hip_r * 1.02, t / 0.30)
+			else:
+				rr = lerpf(hip_r * 1.02, hem_r, (t - 0.30) / 0.70)
+			pos.set(i, Vector3(cos(ang) * rr, _cloth_cy - len_total * t, sin(ang) * rr))
+			pinned.set(i, 1 if r < cloth_pin_rows else 0)
+	_cloth.set_positions(pos)
+	_cloth.set_pinned_flags(pinned)
+	# 关键: 环形布局与 build() 的网格间距不同, 必须重算静止长度
+	_cloth.refresh_rest_lengths()
+	# 身体胶囊碰撞: 布料不穿进身体
+	_cloth.set_body_capsule(true, Vector3(0, _cloth_cy - 0.05, 0), Vector3(0, wi["floor"] + 0.72, 0), maxf(_cloth_R, 0.13))
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.roughness = 0.8
+	m.albedo_color = Color(0.35, 0.42, 0.65)
+	_cloth.set_material(m)
+	_cloth_mesh = MeshInstance3D.new()
+	_cloth_mesh.name = "SkirtClothMesh"
+	_cloth_mesh.top_level = true
+	add_child(_cloth_mesh)
+	_cloth_mesh.visible = not cloth_hidden
+	print("[HS2] 布料 %dx%d 腰 y=%.3f r=%.3f 髋 %.3f 裙长 %.3f" % [
+		cloth_cols, cloth_rows, _cloth_cy, _cloth_R, hip_r, len_total])
+
+func _step_cloth(d: float) -> void:
+	if _cloth == null or _cloth_mesh == null:
+		return
+	# 角色整体移动(拖拽/位移)时, 布料要跟着走
+	if _cloth_follow_prev != Vector3.ZERO or _cloth_follow_init:
+		var now := _character_origin()
+		if _cloth_follow_init:
+			_cloth.translate_model(now - _cloth_follow_prev)
+		_cloth_follow_prev = now
+	_cloth_follow_init = true
+	var sh: float = minf(d, 1.0 / 30.0) / 2.0
+	for ss in 2:
+		_cloth.sub_begin()
+		_cloth.sub_integrate(sh, Vector3.ZERO)
+		_cloth.sub_solve(sh)
+		_cloth.begin_contacts()
+		_cloth.self_collision()
+		_cloth.object_collision()
+		_cloth.final_push_out()
+		_cloth.collide_body_capsule()
+		_cloth.sub_recover(sh)
+	_cloth.update_mesh()
+	_cloth_mesh.mesh = _cloth.get_mesh()
 
 func _instantiate(part: String) -> Dictionary:
 	var ps: PackedScene = load("res://hs2/model/%s.glb" % part)
@@ -198,9 +369,9 @@ func apply_shape() -> void:
 		main_sk.set_bone_pose_position(b, pos)
 		main_sk.set_bone_pose_rotation(b, quat)
 		main_sk.set_bone_pose_scale(b, scl)
-	# 身体形态变了 → 重新评估「哪些头发顶点可能穿模」（碰撞体与候选集都要跟着变）
-	if _hair_physics != null:
-		_hair_physics.rebuild_candidates()
+	# 身体形态变了 → 重启物理头发(头部椭球/身体胶囊要跟着新形态走)
+	if _hair_native != null:
+		_hair_rebuild_pending = true
 
 # ---------------- 材质 ----------------
 func _tex(fname: String) -> Texture2D:
@@ -222,7 +393,9 @@ func _mat(tex: Texture2D, alpha: bool) -> BaseMaterial3D:
 	return m
 
 # 头发材质：走 shaders/hair.gdshader（Kajiya-Kay 双叶各向异性 + 根梢渐变 + 假 AO + 透光）。
-# 发丝切线/根梢参数/朝内遮蔽由 hair_system.gd 在重绑蒙皮时**逐顶点烘焙进 TANGENT 与 COLOR**。
+# 发丝切线/根梢参数/朝内遮蔽由建模阶段**逐顶点烘焙进 TANGENT 与 COLOR**。
+# 注意: 这个着色器只服务 HS2 的"头发贴片"资产(hair_f/hair_b); 物理头发
+# 走 C++ 插件的顶点色 + 标准材质, 与它无关。
 func _hair_mat(tex: Texture2D) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = HAIR_SHADER
@@ -329,8 +502,16 @@ func _build_ui() -> void:
 		var la := Label.new()
 		la.text = str(al)
 		box.add_child(la)
+	var lh0 := Label.new()
+	lh0.text = "———— 头发（C++ XPBD 物理，测试场景同款）————"
+	box.add_child(lh0)
+	box.add_child(_mk_check("启用物理头发", hair_enabled, func(on: bool): set_hair_enabled(on)))
+	box.add_child(_mk_check("显示 HS2 头发贴片", not hide_hair_shell, func(on: bool): set_hair_shell_visible(on)))
+	_hair_info = Label.new()
+	_hair_info.text = "—"
+	box.add_child(_hair_info)
 	var lh := Label.new()
-	lh.text = "———— 头发 ————"
+	lh.text = "———— 头发贴片部件 ————"
 	box.add_child(lh)
 	var hstat := Label.new()
 	hstat.text = "头发部件: %d 个 %s" % [_hair_nodes.size(), "✓已加载" if _hair_nodes.size() > 0 else "✗未加载"]
@@ -343,40 +524,22 @@ func _build_ui() -> void:
 		cb.toggled.connect(func(on: bool): hn.visible = on)
 		row.add_child(cb)
 		box.add_child(row)
-	var ldisp := Label.new()
-	ldisp.text = "———— 头发显示 ————"
-	box.add_child(ldisp)
-	var disp := OptionButton.new()
-	disp.add_item("头发网格", 0)
-	disp.add_item("仅物理发链", 1)
-	disp.add_item("网格 + 发链", 2)
-	disp.selected = _hair_physics.display_mode if _hair_physics else 0
-	disp.item_selected.connect(func(idx: int): if _hair_physics: _hair_physics.set_display_mode(idx))
-	box.add_child(disp)
-	box.add_child(_mk_check("画关节标记", _hair_physics.chain_show_joints if _hair_physics else false, func(on: bool): if _hair_physics: _hair_physics.chain_show_joints = on))
-	var lph := Label.new()
-	lph.text = "———— 头发物理（自实现发链系统）————"
-	box.add_child(lph)
-	var hchain := Label.new()
-	hchain.text = "发链 %d 条（导引 %d + 插值 %d）" % [
-		_hair_physics.chain_count() if _hair_physics else 0,
-		_hair_physics.guide_count() if _hair_physics else 0,
-		(_hair_physics.chain_count() - _hair_physics.guide_count()) if _hair_physics else 0,
-	]
-	box.add_child(hchain)
-	_hair_metric = Label.new()
-	_hair_metric.text = "—"
-	box.add_child(_hair_metric)
-	box.add_child(_mk_check("启用头发物理", _hair_physics.enabled if _hair_physics else false, func(on: bool): if _hair_physics: _hair_physics.set_enabled(on)))
-	box.add_child(_mk_phys("刚度", 0.0, 1.0, _hair_physics.stiffness if _hair_physics else 0.45, func(v: float): if _hair_physics: _hair_physics.stiffness = v))
-	box.add_child(_mk_phys("阻尼", 0.0, 1.0, _hair_physics.drag if _hair_physics else 0.35, func(v: float): if _hair_physics: _hair_physics.drag = v))
-	box.add_child(_mk_phys("重力", 0.0, 20.0, _hair_physics.gravity if _hair_physics else 5.0, func(v: float): if _hair_physics: _hair_physics.gravity = v))
-	box.add_child(_mk_phys("风力", -25.0, 25.0, _hair_physics.wind.x if _hair_physics else 0.0, func(v: float): if _hair_physics: _hair_physics.wind = Vector3(v, 0, 0)))
-	box.add_child(_mk_phys("鸟群分离", 0.0, 0.08, _hair_physics.boid_separation if _hair_physics else 0.030, func(v: float): if _hair_physics: _hair_physics.boid_separation = v))
-	box.add_child(_mk_phys("碰撞半径×", 0.0, 1.5, _hair_physics.collision_radius_scale if _hair_physics else 1.0, func(v: float): if _hair_physics: _hair_physics.collision_radius_scale = v))
+	# ---- 求解参数 ----
+	box.add_child(_mk_phys("链刚度", 0.0, 1.0, hair_stiffness, func(v: float):
+		hair_stiffness = v
+		if _hair_native: _hair_native.set_stiffness(v)))
+	box.add_child(_mk_phys("阻尼", 0.0, 1.0, hair_damping, func(v: float):
+		hair_damping = v
+		if _hair_native: _hair_native.set_damping(v)))
+	box.add_child(_mk_phys("风力", -30.0, 30.0, hair_wind, func(v: float):
+		hair_wind = v
+		if _hair_native: _hair_native.set_wind(Vector3(v, 0.0, 0.0))))
+	box.add_child(_mk_phys("渲染发丝数", 200.0, 12000.0, float(hair_render_strands), func(v: float):
+		hair_render_strands = int(v)
+		if _hair_native: _hair_native.set_render_strands(int(v))))
 	var lreset := Button.new()
-	lreset.text = "重置头发物理"
-	lreset.pressed.connect(func(): if _hair_physics: _hair_physics.reset_physics())
+	lreset.text = "重置物理头发"
+	lreset.pressed.connect(func(): if _hair_native: _hair_native.reset_physics())
 	box.add_child(lreset)
 	var l1 := Label.new()
 	l1.text = "———— 脸部（face）————"
@@ -430,9 +593,24 @@ var _acc_lines: Array = []
 var _face_names: PackedStringArray = PackedStringArray()
 var _body_names: PackedStringArray = PackedStringArray()
 var _hair_nodes: Array = []
-var _hair_physics: Node
-var _hair_metric: Label
+var _hair_native: Node3D          # C++ XPBD 物理头发(HS2HairNative)
+var _hair_info: Label
+var _hair_rebuild_pending := false
+var _cloth: XPBDClothNative       # 环形裙布
+var _cloth_mesh: MeshInstance3D
+var _cloth_hip := Vector3.ZERO    # 腰(裙布顶行)位置，装配空间
+var _cloth_R := 0.19
+var _cloth_cy := 0.78
+var _shaking := false
+var _cloth_follow_prev := Vector3.ZERO
+var _cloth_follow_init := false
 var _tick := 0
+
+# 角色在世界里的水平位置(布料/头发跟着走)
+func _character_origin() -> Vector3:
+	if model_root == null:
+		return Vector3.ZERO
+	return model_root.global_position
 
 func _run_acceptance() -> void:
 	var lines: Array = []
@@ -522,7 +700,8 @@ func _find_mesh(nm: String) -> MeshInstance3D:
 
 func _world_points(mi: MeshInstance3D, use_raw: bool) -> PackedVector3Array:
 	var out := PackedVector3Array()
-	if mi == null:
+	# 物理头发/裙布的网格节点由求解器每帧写入: 相机取景那一帧可能还没有 mesh
+	if mi == null or mi.mesh == null:
 		return out
 	var skin: Skin = mi.skin
 	var S: Transform3D = main_sk.global_transform
@@ -703,6 +882,8 @@ func _setup_camera() -> void:
 	var aabb := AABB()
 	var first := true
 	for c in find_children("*", "MeshInstance3D", true, false):
+		if _is_physics_mesh(c):
+			continue   # 物理头发/裙布是动态大网格, 不参与取景
 		var pts := _world_points(c, false)
 		if pts.is_empty():
 			continue
@@ -719,11 +900,51 @@ func _setup_camera() -> void:
 func _mesh_aabb_local(mi: MeshInstance3D) -> AABB:
 	return mi.get_aabb()
 
+# 物理求解器生成的网格(头发发丝/裙布): 世界空间 + 每帧重建, 不属于角色装配
+func _is_physics_mesh(mi: Node) -> bool:
+	if _mesh_aabb_local_name(mi) in ["HairNativeMesh", "SkirtClothMesh"]:
+		return true
+	return false
+
+func _mesh_aabb_local_name(mi: Node) -> String:
+	return mi.name
+
 func _unhandled_input(event: InputEvent) -> void:
 	# F 键：对焦到角色（相机脚本处理 R 复位）
 	if event is InputEventKey and event.pressed and not event.echo:
-		if (event as InputEventKey).keycode == KEY_F:
+		var k := (event as InputEventKey).keycode
+		if k == KEY_F:
 			_setup_camera()
+		# ---- 物理测试开关(与"布料测试场景"对齐的操作) ----
+		elif k == KEY_H:
+			set_hair_enabled(not hair_enabled)
+		elif k == KEY_J:
+			_shaking = not _shaking
+		elif k == KEY_K:
+			hair_wind = 0.0 if hair_wind > 0.0 else 8.0
+		elif k == KEY_L:
+			_setup_hair_native()
+		elif k == KEY_P:
+			# 踹一脚裙摆
+			if _cloth:
+				var vel: PackedVector3Array = _cloth.get_velocities()
+				for i in vel.size():
+					vel.set(i, vel[i] + Vector3(1.2, 0.4, 0.6))
+				_cloth.set_velocities(vel)
+
+# 方便 headless 自检: 用关节(骨骼)把头发甩起来(不依赖系统鼠标/键盘)
+func set_shaking(on: bool) -> void:
+	_shaking = on
+
+func _shake_head(d: float) -> void:
+	if not _shaking or main_sk == null:
+		return
+	var hb := main_sk.find_bone(ACC_HEAD_BONE)
+	if hb < 0:
+		return
+	var t := Time.get_ticks_msec() / 1000.0
+	var q := Quaternion(Vector3.UP, 0.55 * sin(t * 7.5))
+	main_sk.set_bone_pose_rotation(hb, q)
 func _mk_check(label: String, value: bool, cb: Callable) -> CheckBox:
 	var c := CheckBox.new()
 	c.text = label

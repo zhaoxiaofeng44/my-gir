@@ -50,7 +50,7 @@ varying float strand_t;
 varying float inner_term;
 
 void vertex() {
-	// TANGENT 是建模阶段按发链方向烘焙的（见 hair_system.gd 的 _reweight_mesh）
+	// TANGENT 是建模阶段按发链方向烘焙的（HS2 贴片头发资产自带；物理头发不走这个着色器）
 	strand_tan = (MODEL_MATRIX * vec4(TANGENT, 0.0)).xyz;
 	strand_t = COLOR.r;
 	inner_term = COLOR.g;

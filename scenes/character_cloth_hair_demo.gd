@@ -7,9 +7,9 @@ extends Node3D
 ## 空格: 甩头(头部快速摆动, 看头发惯性)
 ## R: 重置
 ##
-## 说明: HS2 角色自带 hair_system(GDScript 发束物理)。
-## 本场景额外挂载 C++ XPBDHairNative 在头骨位置做对比演示,
-## 并用 C++ XPBDClothNative 做一条"裙子"布料围在角色腰部。
+## 说明: 头发与布料都由 GDExtension(addons/cloth_native)实现 ——
+## XPBDHairNative 在头骨位置生成物理头发, XPBDClothNative 做一条"裙子"布料围在腰部。
+## (原 hs2/hair_system.gd 那套 GDScript 发束物理已删除。)
 
 var character: Node3D
 var sk: Skeleton3D
